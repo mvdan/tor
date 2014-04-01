@@ -1,0 +1,3 @@
+tor_sample
+*.o
+*_out
