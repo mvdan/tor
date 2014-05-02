@@ -1,15 +1,18 @@
-all: tor_sample tests
+all: client server tests
 
-tor_sample: tor_sample.c
-	$(CC) tor_sample.c -std=c99 -o tor_sample
+client: client.c
+	$(CC) $(CFLAGS) client.c -o client
 
-test1_out: tor_sample test1_in test1_diff
-	./tor_sample test1_in test1_out < test1_diff
-	diff test1_expected test1_out
+c_test1: client c_test1_in c_test1_diff
+	./client c_test1_in c_test1_out < c_test1_diff
+	diff c_test1_expected c_test1_out
 
-tests: test1_out
+server: server.c
+	$(CC) $(CFLAGS) server.c -o server
+
+tests: c_test1
 
 clean:
-	rm -f tor_sample *_out
+	rm -f client server *_out
 
 .PHONY: all clean tests
