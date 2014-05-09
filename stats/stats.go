@@ -5,28 +5,100 @@ import (
 	//"os"
 	"os/exec"
 	"io"
+	"bufio"
 	"log"
+	"strings"
 	"archive/tar"
+	"path"
+	"sort"
 	"path/filepath"
 )
+
+type Consensus struct {
+	Time string
+	Ids []string
+}
+type Consensuses []Consensus
+
+func (c Consensuses) Len() int {
+	return len(c)
+}
+
+func (c Consensuses) Less(i, j int) bool {
+	return c[i].Time < c[j].Time
+}
+
+func (c Consensuses) Swap(i, j int) {
+	c[i], c[j] = c[j], c[i]
+}
+
+var consensuses Consensuses
 
 func analyze(tr *tar.Reader) {
 	for {
 		hdr, err := tr.Next()
 		if err == io.EOF {
-			// end of tar archive
 			break
 		}
 		if err != nil {
 			log.Fatalln(err)
 		}
-		fmt.Printf("%s\n", hdr.Name)
-	}
+		if len(hdr.Name) <= len("consensuses-YYYY-MM/DD/") {
+			continue
+		}
 
+		log.Println(hdr.Name)
+		time := path.Base(hdr.Name)[:len("YYYY-MM-DD-HH")]
+		consensus := Consensus{Time: time}
+		scanner := bufio.NewScanner(tr)
+		for scanner.Scan() {
+			text := scanner.Text()
+			switch text[0] {
+			case 'r':
+				fields := strings.Split(text, " ")
+				if len(fields) < 3 {
+					continue
+				}
+				consensus.Ids = append(consensus.Ids, fields[2])
+			default:
+				continue
+			}
+		}
+		if err := scanner.Err(); err != nil {
+			log.Fatal(err)
+		}
+		consensuses = append(consensuses, consensus)
+	}
+}
+
+func results() {
+	sort.Sort(consensuses)
+	hoursGone := make(map[string]int)
+	for _,consensus := range consensuses {
+		idsLeft := make(map[string]bool)
+		for id,_ := range hoursGone {
+			idsLeft[id] = true
+		}
+		for _,id := range consensus.Ids {
+			h, e := hoursGone[id]
+			if e {
+				if h > 0 {
+					log.Printf("%s had been gone for %d hours\n", id, h)
+				}
+			} else {
+			}
+			delete(idsLeft, id)
+			hoursGone[id] = 0
+		}
+		for id,_ := range idsLeft {
+			hoursGone[id]++
+			//log.Printf("%s has now been gone for %d hours\n", id, hoursGone[id])
+		}
+	}
 }
 
 func main() {
-	tarpaths, err := filepath.Glob("*.tar.*")
+	tarpaths, err := filepath.Glob("consensuses-*.tar.*")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -56,5 +128,6 @@ func main() {
 		tr := tar.NewReader(fr)
 		analyze(tr)
 	}
+	results()
 
 }
