@@ -3,20 +3,20 @@ package main
 import (
 	"fmt"
 	//"os"
-	"os/exec"
-	"io"
-	"bufio"
-	"log"
-	"strings"
 	"archive/tar"
+	"bufio"
+	"io"
+	"log"
+	"os/exec"
 	"path"
-	"sort"
 	"path/filepath"
+	"sort"
+	"strings"
 )
 
 type Consensus struct {
 	Time string
-	Ids []string
+	Ids  []string
 }
 type Consensuses []Consensus
 
@@ -74,12 +74,12 @@ func analyze(tr *tar.Reader) {
 func results() {
 	sort.Sort(consensuses)
 	hoursGone := make(map[string]int)
-	for _,consensus := range consensuses {
+	for _, consensus := range consensuses {
 		idsLeft := make(map[string]bool)
-		for id,_ := range hoursGone {
+		for id, _ := range hoursGone {
 			idsLeft[id] = true
 		}
-		for _,id := range consensus.Ids {
+		for _, id := range consensus.Ids {
 			h, e := hoursGone[id]
 			if e {
 				if h > 0 {
@@ -90,7 +90,7 @@ func results() {
 			delete(idsLeft, id)
 			hoursGone[id] = 0
 		}
-		for id,_ := range idsLeft {
+		for id, _ := range idsLeft {
 			hoursGone[id]++
 			//log.Printf("%s has now been gone for %d hours\n", id, hoursGone[id])
 		}
@@ -103,7 +103,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	for _,tp := range tarpaths {
+	for _, tp := range tarpaths {
 		fmt.Printf("Parsing %s\n", tp)
 		ext := filepath.Ext(tp)
 		var catcmd string
