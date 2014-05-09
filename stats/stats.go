@@ -11,11 +11,11 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	//"time"
+	"time"
 )
 
 type Consensus struct {
-	Time string
+	Time time.Time
 	Ids  []string
 }
 
@@ -26,7 +26,7 @@ func (c Consensuses) Len() int {
 }
 
 func (c Consensuses) Less(i, j int) bool {
-	return c[i].Time < c[j].Time
+	return c[i].Time.Before(c[j].Time)
 }
 
 func (c Consensuses) Swap(i, j int) {
@@ -34,6 +34,11 @@ func (c Consensuses) Swap(i, j int) {
 }
 
 var consensuses Consensuses
+
+const (
+	dateRawForm = "2006-01-02-15-04-05"
+	dateOutForm = "2006-01-02-15-04-05"
+)
 
 func analyze(tr *tar.Reader) {
 	for {
@@ -49,8 +54,9 @@ func analyze(tr *tar.Reader) {
 		}
 
 		log.Println(hdr.Name)
-		time := path.Base(hdr.Name)[:len("YYYY-MM-DD-HH")]
-		consensus := Consensus{Time: time}
+		strTime := path.Base(hdr.Name)[:len("YYYY-MM-DD-HH-MM-SS")]
+		parsedTime, err := time.Parse(dateRawForm, strTime)
+		consensus := Consensus{Time: parsedTime}
 		scanner := bufio.NewScanner(tr)
 		for scanner.Scan() {
 			text := scanner.Text()
@@ -74,24 +80,23 @@ func analyze(tr *tar.Reader) {
 
 func results() {
 	sort.Sort(consensuses)
-	hoursGone := make(map[string]int)
+	previousTime := consensuses[0].Time
+	lastSeen := make(map[string]time.Time)
 	for _, consensus := range consensuses {
-		idsLeft := make(map[string]bool)
-		for id, _ := range hoursGone {
-			idsLeft[id] = true
-		}
+		log.Printf("Doing consensus at time %s\n", consensus.Time.Format(dateOutForm))
 		for _, id := range consensus.Ids {
-			h, e := hoursGone[id]
-			if e && h > 0 {
-				log.Printf("%s had been gone for %d hours\n", id, h)
+			t, e := lastSeen[id]
+			if e {
+				if t != previousTime {
+					hoursGone := int(consensus.Time.Sub(t).Hours())
+					if hoursGone > 0 {
+						log.Printf("%s had been gone for %d hours\n", id, hoursGone)
+					}
+				}
 			}
-			delete(idsLeft, id)
-			hoursGone[id] = 0
+			lastSeen[id] = consensus.Time
 		}
-		for id, _ := range idsLeft {
-			hoursGone[id]++
-			//log.Printf("%s has now been gone for %d hours\n", id, hoursGone[id])
-		}
+		previousTime = consensus.Time
 	}
 }
 
