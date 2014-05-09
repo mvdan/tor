@@ -42,15 +42,25 @@ type Consensus struct {
 	Size int64
 }
 
+type Diff struct {
+	Added   int
+	Removed int
+}
+
 type Consensuses []Consensus
+
+type StepStats struct {
+	Diffs        []Diff
+	MeanDiffSize ByteSize
+}
 
 type ConsensusStats struct {
 	Data              Consensuses
+	SS                []StepStats
 	MeanEntrySize     ByteSize
 	MeanConsensusSize ByteSize
-	MeanDiffSize      ByteSize
 	TotalSize         int64
-	HoursMissingIds   [][]string
+	TotalEntryCount   int
 }
 
 func (c Consensuses) Len() int {
@@ -80,10 +90,10 @@ func analyze(cs Consensuses, tr *tar.Reader) Consensuses {
 			log.Fatalln(err)
 		}
 		if hdr.Typeflag != tar.TypeReg {
+			log.Println(hdr.Name)
 			continue
 		}
 
-		//log.Println(hdr.Name)
 		strTime := path.Base(hdr.Name)[:len("YYYY-MM-DD-HH-MM-SS")]
 		parsedTime, err := time.Parse(dateInForm, strTime)
 		c := Consensus{Time: parsedTime, Size: hdr.Size}
@@ -109,71 +119,57 @@ func analyze(cs Consensuses, tr *tar.Reader) Consensuses {
 	return cs
 }
 
-func results(cst ConsensusStats) {
+func results(cst ConsensusStats, steps int) {
 	cs := cst.Data
 	if len(cs) == 0 {
 		return
 	}
 	sort.Sort(cs)
-	previousTime := cs[0].Time
-	lastSeen := make(map[string]time.Time)
 	cst.TotalSize = 0
-	var meanEntrySize, meanDiffCount int64 = 0, 0
 	for _, c := range cs {
-		//log.Printf("Doing consensus from %s\n", c.Time.Format(dateOutForm))
-		for _, id := range c.Ids {
-			t, e := lastSeen[id]
-			if e && t != previousTime {
-				h := int(c.Time.Sub(t).Hours())
-				c := cap(cst.HoursMissingIds)
-				if h >= c {
-					t := make([][]string, c*2)
-					copy(t, cst.HoursMissingIds)
-					cst.HoursMissingIds = t
-				}
-				//log.Printf("%s had been gone for %d hours\n", id, h)
-				cst.HoursMissingIds[h] = append(cst.HoursMissingIds[h], id)
-			}
-			if !e || (e && t != previousTime) {
-				meanDiffCount++
-			}
-			lastSeen[id] = c.Time
-		}
-		previousTime = c.Time
 		cst.TotalSize += c.Size
-		meanEntrySize += c.Size / int64(len(c.Ids))
+		cst.TotalEntryCount += len(c.Ids)
 	}
-	cst.MeanEntrySize = ByteSize(meanEntrySize) / ByteSize(len(cs))
-	cst.MeanDiffSize = (ByteSize(meanDiffCount) / ByteSize(len(cs))) * ByteSize(cst.MeanEntrySize)
 	cst.MeanConsensusSize = ByteSize(cst.TotalSize) / ByteSize(len(cs))
-	fmt.Printf("Mean consensus entry size in bytes is %s\n", cst.MeanEntrySize.String())
-	fmt.Printf("Mean consensus size in Kbytes is %s\n", cst.MeanConsensusSize.String())
-	fmt.Printf("Mean diff size in Kbytes is %s\n", cst.MeanDiffSize.String())
-	var countAcc int = 0
-	consensusSizeInMonth := cst.MeanConsensusSize / ByteSize(cst.TotalSize)
-	for h, ids := range cst.HoursMissingIds {
-		c := len(ids)
-		if c == 0 {
-			continue
+	cst.MeanEntrySize = ByteSize(cst.TotalSize) / ByteSize(cst.TotalEntryCount)
+	fmt.Printf("== Global data ==\n")
+	fmt.Printf("Number of consensuses: %d\n", len(cst.Data))
+	fmt.Printf("Mean consensus size: %s\n", cst.MeanConsensusSize.String())
+	fmt.Printf("Mean entry size: %s\n", cst.MeanEntrySize.String())
+	cst.SS = make([]StepStats, steps)
+	for step := 1; step <= steps; step++ {
+		stepStats := cst.SS[step-1]
+		diffs := stepStats.Diffs
+		var totalDiffEntryCount int = 0
+		for i, c := range cs {
+			diff := Diff{}
+			var prevIds []string
+			prev := i - step
+			if prev >= 0 {
+				prevIds = cs[prev].Ids
+			} else {
+				prevIds = make([]string, 0)
+			}
+			prevIdsMap := make(map[string]bool)
+			for _, id := range prevIds {
+				prevIdsMap[id] = true
+			}
+			for _, id := range c.Ids {
+				a, e := prevIdsMap[id]
+				if e && a {
+				} else {
+					diff.Added++
+				}
+				delete(prevIdsMap, id)
+			}
+			diff.Removed += len(prevIdsMap)
+			// Plus one to simulate overhead
+			totalDiffEntryCount += diff.Added + diff.Removed + 1
+			diffs = append(diffs, diff)
 		}
-		// Twice, once for disappearing and once for reappearing
-		count := c * 2
-		countAcc += count
-		countCons := int(ByteSize(countAcc) * consensusSizeInMonth)
-		size := ByteSize(count) * cst.MeanEntrySize
-		sizeAcc := ByteSize(countAcc) * cst.MeanEntrySize
-		sizeCons := sizeAcc * consensusSizeInMonth
-		percentInc := (size / ByteSize(cst.TotalSize)) * 100.0
-		if percentInc < 0.002 {
-			continue
-		}
-		percentTotal := (sizeAcc / ByteSize(cst.TotalSize)) * 100.0
-		percentDiff := (sizeCons / ByteSize(cst.MeanDiffSize)) * 100.0
-
-		fmt.Printf("Keeping %d hours of consensuses saves:\n", h)
-		fmt.Printf("	%d entries [%s] a month: %.2f\n", countAcc, sizeAcc.String(), percentTotal)
-		fmt.Printf("	%d entries [%s] per consensus: %.2f\n", countCons, sizeCons.String(), percentTotal)
-		fmt.Printf("	%d entries [%s] per diff: %.2f\n", countCons, sizeCons.String(), percentDiff)
+		stepStats.MeanDiffSize = ByteSize(totalDiffEntryCount) * (cst.MeanEntrySize / ByteSize(len(diffs)))
+		fmt.Printf("== Step %d ==\n", step)
+		fmt.Printf("Mean diff size is %s\n", stepStats.MeanDiffSize.String())
 	}
 }
 
@@ -184,7 +180,6 @@ func main() {
 	}
 
 	cst := ConsensusStats{}
-	cst.HoursMissingIds = make([][]string, 100)
 
 	for _, tp := range tarpaths {
 		fmt.Printf("Parsing %s\n", tp)
@@ -214,5 +209,5 @@ func main() {
 		tr := tar.NewReader(fr)
 		cst.Data = analyze(cst.Data, tr)
 	}
-	results(cst)
+	results(cst, 10)
 }
