@@ -17,9 +17,15 @@ import (
 type Consensus struct {
 	Time time.Time
 	Ids  []string
+	Size int64
 }
 
 type Consensuses []Consensus
+
+type ConsensusStats struct {
+	Data          Consensuses
+	MeanEntrySize int64
+}
 
 func (c Consensuses) Len() int {
 	return len(c)
@@ -54,7 +60,7 @@ func analyze(cs Consensuses, tr *tar.Reader) Consensuses {
 		log.Println(hdr.Name)
 		strTime := path.Base(hdr.Name)[:len("YYYY-MM-DD-HH-MM-SS")]
 		parsedTime, err := time.Parse(dateRawForm, strTime)
-		c := Consensus{Time: parsedTime}
+		c := Consensus{Time: parsedTime, Size: hdr.Size}
 		scanner := bufio.NewScanner(tr)
 		for scanner.Scan() {
 			text := scanner.Text()
@@ -77,26 +83,29 @@ func analyze(cs Consensuses, tr *tar.Reader) Consensuses {
 	return cs
 }
 
-func results(cs Consensuses) {
+func results(cst ConsensusStats) {
+	cs := cst.Data
 	sort.Sort(cs)
 	previousTime := cs[0].Time
 	lastSeen := make(map[string]time.Time)
+	csSize := int64(0)
 	for _, c := range cs {
-		log.Printf("Doing consensus at time %s\n", c.Time.Format(dateOutForm))
+		log.Printf("Doing consensus from %s\n", c.Time.Format(dateOutForm))
 		for _, id := range c.Ids {
 			t, e := lastSeen[id]
-			if e {
-				if t != previousTime {
-					hoursGone := int(c.Time.Sub(t).Hours())
-					if hoursGone > 0 {
-						log.Printf("%s had been gone for %d hours\n", id, hoursGone)
-					}
+			if e && t != previousTime {
+				hoursGone := int(c.Time.Sub(t).Hours())
+				if hoursGone > 0 {
+					//log.Printf("%s had been gone for %d hours\n", id, hoursGone)
 				}
 			}
 			lastSeen[id] = c.Time
 		}
 		previousTime = c.Time
+		csSize += c.Size / int64(len(c.Ids))
 	}
+	cst.MeanEntrySize = csSize / int64(len(cs))
+	log.Printf("Mean consensus entry size in bytes is %d\n", cst.MeanEntrySize)
 }
 
 func main() {
@@ -105,7 +114,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	cs := make(Consensuses, 0)
+	cst := ConsensusStats{}
 
 	for _, tp := range tarpaths {
 		fmt.Printf("Parsing %s\n", tp)
@@ -132,7 +141,7 @@ func main() {
 			log.Fatal(err)
 		}
 		tr := tar.NewReader(fr)
-		cs = analyze(cs, tr)
+		cst.Data = analyze(cst.Data, tr)
 	}
-	results(cs)
+	results(cst)
 }
