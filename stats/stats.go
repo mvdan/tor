@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	//"os"
 	"archive/tar"
 	"bufio"
 	"io"
@@ -12,12 +11,14 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	//"time"
 )
 
 type Consensus struct {
 	Time string
 	Ids  []string
 }
+
 type Consensuses []Consensus
 
 func (c Consensuses) Len() int {
@@ -43,7 +44,7 @@ func analyze(tr *tar.Reader) {
 		if err != nil {
 			log.Fatalln(err)
 		}
-		if len(hdr.Name) <= len("consensuses-YYYY-MM/DD/") {
+		if hdr.Typeflag != tar.TypeReg {
 			continue
 		}
 
@@ -81,11 +82,8 @@ func results() {
 		}
 		for _, id := range consensus.Ids {
 			h, e := hoursGone[id]
-			if e {
-				if h > 0 {
-					log.Printf("%s had been gone for %d hours\n", id, h)
-				}
-			} else {
+			if e && h > 0 {
+				log.Printf("%s had been gone for %d hours\n", id, h)
 			}
 			delete(idsLeft, id)
 			hoursGone[id] = 0
@@ -112,6 +110,8 @@ func main() {
 			catcmd = "xzcat"
 		case ".bz2":
 			catcmd = "bzcat"
+		case ".gz":
+			catcmd = "zcat"
 		default:
 			log.Printf("Unsupported format .tar%s in %s", ext, tp)
 			continue
@@ -121,7 +121,7 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		//defer fr.Close()
+		defer fr.Close()
 		if err := cmd.Start(); err != nil {
 			log.Fatal(err)
 		}
@@ -129,5 +129,4 @@ func main() {
 		analyze(tr)
 	}
 	results()
-
 }
