@@ -49,14 +49,14 @@ type Diff struct {
 
 type Consensuses []Consensus
 
-type StepStats struct {
+type IntervalStats struct {
 	Diffs        []Diff
 	MeanDiffSize ByteSize
 }
 
 type ConsensusStats struct {
 	Data              Consensuses
-	SS                []StepStats
+	IS                []IntervalStats
 	MeanEntrySize     ByteSize
 	MeanConsensusSize ByteSize
 	TotalSize         int64
@@ -119,7 +119,7 @@ func analyze(cs Consensuses, tr *tar.Reader) Consensuses {
 	return cs
 }
 
-func results(cst ConsensusStats, steps int) {
+func results(cst ConsensusStats, maxInterval int) {
 	cs := cst.Data
 	if len(cs) == 0 {
 		return
@@ -136,15 +136,15 @@ func results(cst ConsensusStats, steps int) {
 	fmt.Printf("Number of consensuses: %d\n", len(cst.Data))
 	fmt.Printf("Mean consensus size: %s\n", cst.MeanConsensusSize.String())
 	fmt.Printf("Mean entry size: %s\n", cst.MeanEntrySize.String())
-	cst.SS = make([]StepStats, steps)
-	for step := 1; step <= steps; step++ {
-		stepStats := cst.SS[step-1]
-		diffs := stepStats.Diffs
+	cst.IS = make([]IntervalStats, maxInterval)
+	for interval := 1; interval <= maxInterval; interval++ {
+		intervalStats := cst.IS[interval-1]
+		diffs := intervalStats.Diffs
 		var totalDiffEntryCount int = 0
 		for i, c := range cs {
 			diff := Diff{}
 			var prevIds []string
-			prev := i - step
+			prev := i - interval
 			if prev >= 0 {
 				prevIds = cs[prev].Ids
 			} else {
@@ -167,9 +167,9 @@ func results(cst ConsensusStats, steps int) {
 			totalDiffEntryCount += diff.Added + diff.Removed + 1
 			diffs = append(diffs, diff)
 		}
-		stepStats.MeanDiffSize = ByteSize(totalDiffEntryCount) * (cst.MeanEntrySize / ByteSize(len(diffs)))
-		fmt.Printf("== Step %d ==\n", step)
-		fmt.Printf("Mean diff size is %s\n", stepStats.MeanDiffSize.String())
+		intervalStats.MeanDiffSize = ByteSize(totalDiffEntryCount) * (cst.MeanEntrySize / ByteSize(len(diffs)))
+		fmt.Printf("== Interval %dh ==\n", interval)
+		fmt.Printf("Mean diff size is %s\n", intervalStats.MeanDiffSize.String())
 	}
 }
 
