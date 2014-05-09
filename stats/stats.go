@@ -1,9 +1,9 @@
 package main
 
 import (
-	"fmt"
 	"archive/tar"
 	"bufio"
+	"fmt"
 	"io"
 	"log"
 	"os/exec"
@@ -33,14 +33,12 @@ func (c Consensuses) Swap(i, j int) {
 	c[i], c[j] = c[j], c[i]
 }
 
-var consensuses Consensuses
-
 const (
 	dateRawForm = "2006-01-02-15-04-05"
 	dateOutForm = "2006-01-02-15-04-05"
 )
 
-func analyze(tr *tar.Reader) {
+func analyze(cs Consensuses, tr *tar.Reader) Consensuses {
 	for {
 		hdr, err := tr.Next()
 		if err == io.EOF {
@@ -56,7 +54,7 @@ func analyze(tr *tar.Reader) {
 		log.Println(hdr.Name)
 		strTime := path.Base(hdr.Name)[:len("YYYY-MM-DD-HH-MM-SS")]
 		parsedTime, err := time.Parse(dateRawForm, strTime)
-		consensus := Consensus{Time: parsedTime}
+		c := Consensus{Time: parsedTime}
 		scanner := bufio.NewScanner(tr)
 		for scanner.Scan() {
 			text := scanner.Text()
@@ -66,7 +64,7 @@ func analyze(tr *tar.Reader) {
 				if len(fields) < 3 {
 					continue
 				}
-				consensus.Ids = append(consensus.Ids, fields[2])
+				c.Ids = append(c.Ids, fields[2])
 			default:
 				continue
 			}
@@ -74,29 +72,30 @@ func analyze(tr *tar.Reader) {
 		if err := scanner.Err(); err != nil {
 			log.Fatal(err)
 		}
-		consensuses = append(consensuses, consensus)
+		cs = append(cs, c)
 	}
+	return cs
 }
 
-func results() {
-	sort.Sort(consensuses)
-	previousTime := consensuses[0].Time
+func results(cs Consensuses) {
+	sort.Sort(cs)
+	previousTime := cs[0].Time
 	lastSeen := make(map[string]time.Time)
-	for _, consensus := range consensuses {
-		log.Printf("Doing consensus at time %s\n", consensus.Time.Format(dateOutForm))
-		for _, id := range consensus.Ids {
+	for _, c := range cs {
+		log.Printf("Doing consensus at time %s\n", c.Time.Format(dateOutForm))
+		for _, id := range c.Ids {
 			t, e := lastSeen[id]
 			if e {
 				if t != previousTime {
-					hoursGone := int(consensus.Time.Sub(t).Hours())
+					hoursGone := int(c.Time.Sub(t).Hours())
 					if hoursGone > 0 {
 						log.Printf("%s had been gone for %d hours\n", id, hoursGone)
 					}
 				}
 			}
-			lastSeen[id] = consensus.Time
+			lastSeen[id] = c.Time
 		}
-		previousTime = consensus.Time
+		previousTime = c.Time
 	}
 }
 
@@ -105,6 +104,8 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	cs := make(Consensuses, 0)
 
 	for _, tp := range tarpaths {
 		fmt.Printf("Parsing %s\n", tp)
@@ -131,7 +132,7 @@ func main() {
 			log.Fatal(err)
 		}
 		tr := tar.NewReader(fr)
-		analyze(tr)
+		cs = analyze(cs, tr)
 	}
-	results()
+	results(cs)
 }
