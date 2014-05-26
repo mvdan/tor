@@ -61,7 +61,8 @@ int main(int argc, char* argv[]) {
 			}
 
 			// discards <n2> - <n1> lines
-			for (long i = l1; i <= l2; ++i) {
+			long i;
+			for (i = l1; i <= l2; ++i) {
 				fgets(orig_line, sizeof(orig_line), fd1);
 			}
 
