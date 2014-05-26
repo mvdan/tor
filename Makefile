@@ -1,3 +1,10 @@
+TOR_INC := src/common src/or src/config src/ext .
+TOR_INC := $(foreach d,$(TOR_INC),-I../tor/$(d))
+
+TOR_LIB := -lpthread -lseccomp -lm ../tor/src/or/tor
+
+CFLAGS := -g $(CFLAGS) $(TOR_INC) $(TOR_LIB)
+
 all: client server tests
 
 client: client.c

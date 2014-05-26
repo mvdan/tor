@@ -1,3 +1,5 @@
 tor_sample
 *.o
 *_out
+server
+client
