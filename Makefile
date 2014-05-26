@@ -10,14 +10,18 @@ all: client server tests
 client: client.c
 	$(CC) $(CFLAGS) client.c -o client
 
-c_test1: client c_test1_in c_test1_diff
-	./client c_test1_in c_test1_out < c_test1_diff
+c_test1: client c_test1_orig c_test1_diff
+	./client c_test1_orig c_test1_out < c_test1_diff
 	diff c_test1_expected c_test1_out
 
 server: server.c
 	$(CC) $(CFLAGS) server.c -o server
 
-tests: c_test1
+s_test1: server s_test1_orig s_test1_new
+	./server s_test1_orig s_test1_new > s_test1_out
+	diff s_test1_expected s_test1_out
+
+tests: c_test1 s_test1
 
 clean:
 	rm -f client server *_out
