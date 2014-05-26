@@ -9,12 +9,12 @@ typedef struct {
   size_t len;
 } line_t;
 
-inline int max(int a, int b)
+INLINE int max(int a, int b)
 {
   return (a > b) ? a : b;
 }
 
-inline int line_eq(smartlist_t *orig, smartlist_t *new, int i1, int i2)
+INLINE int line_eq(smartlist_t *orig, smartlist_t *new, int i1, int i2)
 {
   char *line1 = smartlist_get(orig, i1);
   char *line2 = smartlist_get(new, i2);
@@ -32,17 +32,17 @@ char* append(char* str1, char* str2)
   return result;
 }
 
-void print_diff(smartlist_t *dest, int **Size,
+void generate_diff(smartlist_t *dest, int **Size,
     smartlist_t *orig, smartlist_t *new, int i, int j)
 {
   if (i > 0 && j > 0 && line_eq(orig, new, i-1, j-1)) {
-    print_diff(dest, Size, orig, new, i-1, j-1);
+    generate_diff(dest, Size, orig, new, i-1, j-1);
     smartlist_add(dest, append(" ", smartlist_get(orig, i-1)));
   } else if (j > 0 && (i == 0 || Size[i][j-1] >= Size[i-1][j])) {
-    print_diff(dest, Size, orig, new, i, j-1);
+    generate_diff(dest, Size, orig, new, i, j-1);
     smartlist_add(dest, append("+", smartlist_get(new, j-1)));
   } else if (i > 0 && (j == 0 || Size[i][j-1] < Size[i-1][j])) {
-    print_diff(dest, Size, orig, new, i-1, j);
+    generate_diff(dest, Size, orig, new, i-1, j);
     smartlist_add(dest, append("-", smartlist_get(orig, i-1)));
   }
 }
@@ -71,7 +71,7 @@ void diff(smartlist_t *result, smartlist_t *orig, smartlist_t *new)
   }
 
   /*printf("Length of LCS is %d\n", Size[m][n]);*/
-  print_diff(result, Size, orig, new, m, n);
+  generate_diff(result, Size, orig, new, m, n);
   for (i=0; i<=m; ++i)
   {
     tor_free(Size[i]);
@@ -108,11 +108,11 @@ int main(int argc, char **argv)
     fprintf(stderr, "Usage: %s file1 file2\n", argv[0]);
     return 1;
   }
-  char *cons1, *cons2;
-  int size1 = read_file(&cons1, argv[1]);
-  int size2 = read_file(&cons2, argv[2]);
-  tor_split_lines(orig, cons1, size1);
-  tor_split_lines(new, cons2, size2);
+  char *buf1, *buf2;
+  int size1 = read_file(&buf1, argv[1]);
+  int size2 = read_file(&buf2, argv[2]);
+  tor_split_lines(orig, buf1, size1);
+  tor_split_lines(new, buf2, size2);
 
   diff(result, orig, new);
 
@@ -120,8 +120,8 @@ int main(int argc, char **argv)
     printf("%s\n", cp);
   } SMARTLIST_FOREACH_END(cp);
 
-  tor_free(cons1);
-  tor_free(cons2);
+  tor_free(buf1);
+  tor_free(buf2);
   SMARTLIST_FOREACH_BEGIN(result, char *, cp) {
     tor_free(cp);
   } SMARTLIST_FOREACH_END(cp);
