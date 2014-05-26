@@ -1,7 +1,9 @@
-TOR_INC := src/common src/or src/config src/ext .
-TOR_INC := $(foreach d,$(TOR_INC),-I../tor/$(d))
+TORDIR ?= $(HOME)/git/tor
 
-TOR_LIB := -lpthread -lseccomp -lm ../tor/src/or/tor
+TOR_INC := src/common src/or src/config src/ext .
+TOR_INC := $(foreach d,$(TOR_INC),-I$(TORDIR)/$(d))
+
+TOR_LIB := -lpthread -lseccomp -lm $(TORDIR)/src/or/tor
 
 CFLAGS := -g $(CFLAGS) $(TOR_INC) $(TOR_LIB)
 
