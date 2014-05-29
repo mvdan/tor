@@ -73,25 +73,6 @@ void diff(smartlist_t *result, smartlist_t *orig, smartlist_t *new)
   tor_free(Size);
 }
 
-int read_file(char **buffer, char *path)
-{
-  long size;
-  FILE *fh = fopen(path, "r");
-  if (fh != NULL)
-  {
-    fseek(fh, 0L, SEEK_END);
-    size = ftell(fh);
-    rewind(fh);
-    *buffer = tor_malloc(size);
-    if (*buffer != NULL)
-    {
-      fread(*buffer, size, 1, fh);
-    }
-    if (fh != NULL) fclose(fh);
-  }
-  return (int)size;
-}
-
 int main(int argc, char **argv)
 {
   smartlist_t *orig = smartlist_new();
@@ -102,11 +83,10 @@ int main(int argc, char **argv)
     fprintf(stderr, "Usage: %s file1 file2\n", argv[0]);
     return 1;
   }
-  char *buf1, *buf2;
-  int size1 = read_file(&buf1, argv[1]);
-  int size2 = read_file(&buf2, argv[2]);
-  tor_split_lines(orig, buf1, size1);
-  tor_split_lines(new, buf2, size2);
+  char *cons1 = read_file_to_str(argv[1], 0, NULL);
+  char *cons2 = read_file_to_str(argv[2], 0, NULL);
+  tor_split_lines(orig, cons1, strlen(cons1));
+  tor_split_lines(new, cons2, strlen(cons2));
 
   diff(result, orig, new);
 
@@ -114,8 +94,8 @@ int main(int argc, char **argv)
     printf("%s\n", cp);
   } SMARTLIST_FOREACH_END(cp);
 
-  tor_free(buf1);
-  tor_free(buf2);
+  tor_free(cons1);
+  tor_free(cons2);
   SMARTLIST_FOREACH_BEGIN(result, char *, cp) {
     tor_free(cp);
   } SMARTLIST_FOREACH_END(cp);
