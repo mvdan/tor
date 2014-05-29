@@ -22,28 +22,22 @@ INLINE int line_eq(smartlist_t *orig, smartlist_t *new, int i1, int i2)
   return r;
 }
 
-char* append(char* str1, char* str2)
-{
-  char *result = tor_malloc(strlen(str1)+strlen(str2)+1);
-  if (result == NULL) return result;
-  result[0] = '\0';
-  strcat(result, str1);
-  strcat(result, str2);
-  return result;
-}
-
 void generate_diff(smartlist_t *dest, int **Size,
     smartlist_t *orig, smartlist_t *new, int i, int j)
 {
+  char *line;
   if (i > 0 && j > 0 && line_eq(orig, new, i-1, j-1)) {
     generate_diff(dest, Size, orig, new, i-1, j-1);
-    smartlist_add(dest, append(" ", smartlist_get(orig, i-1)));
+    tor_asprintf(&line, " %s", smartlist_get(orig, i-1));
+    smartlist_add(dest, line);
   } else if (j > 0 && (i == 0 || Size[i][j-1] >= Size[i-1][j])) {
     generate_diff(dest, Size, orig, new, i, j-1);
-    smartlist_add(dest, append("+", smartlist_get(new, j-1)));
+    tor_asprintf(&line, "+%s", smartlist_get(new, j-1));
+    smartlist_add(dest, line);
   } else if (i > 0 && (j == 0 || Size[i][j-1] < Size[i-1][j])) {
     generate_diff(dest, Size, orig, new, i-1, j);
-    smartlist_add(dest, append("-", smartlist_get(orig, i-1)));
+    tor_asprintf(&line, "-%s", smartlist_get(orig, i-1));
+    smartlist_add(dest, line);
   }
 }
 
