@@ -5,9 +5,9 @@ TOR_INC := $(foreach d,$(TOR_INC),-I$(TORDIR)/$(d))
 
 TOR_LIB := -lpthread -lseccomp -lm $(TORDIR)/src/or/tor
 
-CFLAGS := -g $(CFLAGS) $(TOR_INC) $(TOR_LIB)
+CFLAGS := -O2 -Wall -Wextra -g $(CFLAGS) $(TOR_INC) $(TOR_LIB)
 
-all: client server tests
+all: client server
 
 client: client.c
 	$(CC) $(CFLAGS) client.c -o client
@@ -23,7 +23,7 @@ s_test1: server test/s_test1_orig test/s_test1_new
 	./server test/s_test1_orig test/s_test1_new > test/s_test1_out
 	diff test/s_test1_expected test/s_test1_out
 
-tests: c_test1 s_test1
+test: c_test1 s_test1
 
 clean:
 	rm -f client server test/*_out
