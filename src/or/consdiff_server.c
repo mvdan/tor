@@ -11,9 +11,9 @@ typedef struct {
 
 typedef struct {
   smartlist_t *list;
-  // if len < 0, the slice is in reverse order
   int offset;
   int len;
+  int direction;
 } smartlist_slice_t;
 
 INLINE smartlist_slice_t* smartlist_slice(smartlist_t *list, int offset, int len)
@@ -22,6 +22,7 @@ INLINE smartlist_slice_t* smartlist_slice(smartlist_t *list, int offset, int len
   slice->list = list;
   slice->offset = offset;
   slice->len = len;
+  slice->direction = 1;
   return slice;
 }
 
@@ -29,17 +30,18 @@ INLINE smartlist_slice_t* smartlist_slice_invert(smartlist_slice_t *slice)
 {
   smartlist_slice_t *slice_inv = tor_malloc(sizeof(smartlist_slice_t));
   slice_inv->list = slice->list;
-  slice_inv->offset = (slice->offset+slice->len)-1;
-  slice_inv->len = -1*(slice->len);
+  slice_inv->offset = (slice->offset+(slice->direction*slice->len))-1;
+  slice_inv->len = slice->len;
+  slice_inv->direction = -1*(slice->direction);
   return slice_inv;
 }
 
 INLINE int smartlist_slice_contains_string(smartlist_slice_t *slice,
     const char *element) {
-  int i;
-  int end = slice->offset + slice->len;
-  for (i = slice->offset; i < end; ++i) {
-    const char *s_el = smartlist_get(slice->list, i);
+  int i, si;
+  si = slice->offset;
+  for (i = 0; i < slice->len; si+=slice->direction) {
+    const char *s_el = smartlist_get(slice->list, si);
     if (strcmp(s_el, element) == 0) {
       return 1;
     }
@@ -63,21 +65,15 @@ INLINE int line_eq(smartlist_t *list1, int i1, smartlist_t *list2, int i2)
 int* lcs_lens(smartlist_slice_t *slice1, smartlist_slice_t *slice2)
 {
   int i, j, si, sj;
-  if (slice1->len >= 0) {
-    tor_assert(slice2->len >= 0);
-  } else {
-    tor_assert(slice2->len < 0);
-  }
-  int len1 = abs(slice1->len);
-  int len2 = abs(slice2->len);
-  int *result = tor_malloc(sizeof(int) * (len2+1));
-  for (j = 0; j < len2+1; ++j) result[j] = 0;
-  int *prev = tor_malloc(sizeof(int) * (len2+1));
-  for (i = 0; i < len1; ++i) {
-    si = (slice1->len >= 0) ? slice1->offset + i : slice1->offset - i;
-    for (j = 0; j < len2+1; ++j) prev[j] = result[j];
-    for (j = 0; j < len2; ++j) {
-      sj = (slice2->len >= 0) ? slice2->offset + j : slice2->offset - j;
+  tor_assert(slice1->direction == slice2->direction);
+  int *result = tor_malloc(sizeof(int) * (slice2->len+1));
+  for (j = 0; j < slice2->len+1; ++j) result[j] = 0;
+  int *prev = tor_malloc(sizeof(int) * (slice2->len+1));
+  si = slice1->offset;
+  for (i = 0; i < slice1->len; ++i, si+=slice1->direction) {
+    for (j = 0; j < slice2->len+1; ++j) prev[j] = result[j];
+    sj = slice2->offset;
+    for (j = 0; j < slice2->len; ++j, sj+=slice2->direction) {
       if (line_eq(slice1->list, si, slice2->list, sj)) {
         result[j + 1] = prev[j] + 1;
       } else {
@@ -90,9 +86,9 @@ int* lcs_lens(smartlist_slice_t *slice1, smartlist_slice_t *slice2)
 }
 
 void print_slice(smartlist_slice_t *slice) {
-  int i, si, abslen = abs(slice->len);
-  for (i = 0; i < abslen; ++i) {
-    si = (slice->len >= 0) ? slice->offset + i : slice->offset - i;
+  int i, si;
+  si = slice->offset;
+  for (i = 0; i < slice->len; si+=slice->direction) {
     printf("%s\n", (char*)smartlist_get(slice->list, si));
   }
   printf("\n");
@@ -100,9 +96,9 @@ void print_slice(smartlist_slice_t *slice) {
 
 smartlist_t *smartlist_slice_to_list(smartlist_slice_t *slice) {
   smartlist_t *list = smartlist_new();
-  int i, si, abslen = abs(slice->len);
-  for (i = 0; i < abslen; ++i) {
-    si = (slice->len >= 0) ? slice->offset + i : slice->offset - i;
+  int i, si;
+  si = slice->offset;
+  for (i = 0; i < slice->len; si+=slice->direction) {
     smartlist_add(list, smartlist_get(slice->list, si));
   }
   return list;
