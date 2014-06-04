@@ -54,9 +54,8 @@ INLINE int max(int a, int b)
   return (a > b) ? a : b;
 }
 
-INLINE int line_eq(smartlist_t *list1, int i1, smartlist_t *list2, int i2)
+INLINE int line_eq(const char *line1, smartlist_t *list2, int i2)
 {
-  char *line1 = smartlist_get(list1, i1);
   char *line2 = smartlist_get(list2, i2);
   if (line1 == line2) return 0;
   return strcmp(line1, line2) == 0;
@@ -69,12 +68,14 @@ int* lcs_lens(smartlist_slice_t *slice1, smartlist_slice_t *slice2)
   int *result = tor_malloc(sizeof(int) * (slice2->len+1));
   for (j = 0; j < slice2->len+1; ++j) result[j] = 0;
   int *prev = tor_malloc(sizeof(int) * (slice2->len+1));
+  const char *line1;
   si = slice1->offset;
   for (i = 0; i < slice1->len; ++i, si+=slice1->direction) {
     for (j = 0; j < slice2->len+1; ++j) prev[j] = result[j];
+    line1 = smartlist_get(slice1->list, si);
     sj = slice2->offset;
     for (j = 0; j < slice2->len; ++j, sj+=slice2->direction) {
-      if (line_eq(slice1->list, si, slice2->list, sj)) {
+      if (line_eq(line1, slice2->list, sj)) {
         result[j + 1] = prev[j] + 1;
       } else {
         result[j + 1] = max(result[j], prev[j + 1]);
