@@ -56,7 +56,7 @@ INLINE int max(int a, int b)
 
 INLINE int line_eq(const char *line1, smartlist_t *list2, int i2)
 {
-  char *line2 = smartlist_get(list2, i2);
+  const char *line2 = smartlist_get(list2, i2);
   if (line1 == line2) return 0;
   return strcmp(line1, line2) == 0;
 }
@@ -90,7 +90,7 @@ void print_slice(smartlist_slice_t *slice) {
   int i, si;
   si = slice->offset;
   for (i = 0; i < slice->len; si+=slice->direction) {
-    printf("%s\n", (char*)smartlist_get(slice->list, si));
+    printf("%s\n", (const char*)smartlist_get(slice->list, si));
   }
   printf("\n");
 }
