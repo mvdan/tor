@@ -80,7 +80,7 @@ int* lcs_lens(smartlist_slice_t *slice1, smartlist_slice_t *slice2)
   return result;
 }
 
-smartlist_t *lines_action(smartlist_slice_t *slice, char *line_common, int action) {
+smartlist_t *lines_action(smartlist_slice_t *slice, int pos_common, int action) {
   smartlist_t *list = smartlist_new();
   int i, si;
   si = slice->offset;
@@ -88,7 +88,7 @@ smartlist_t *lines_action(smartlist_slice_t *slice, char *line_common, int actio
     char *line = smartlist_get(slice->list, si);
     diff_line_t *diff_line = tor_malloc(sizeof(diff_line_t));
     diff_line->content = line;
-    if (line_common != NULL && strcmp(line, line_common) == 0) {
+    if (si == pos_common) {
       diff_line->action = ACTION_NONE;
     } else {
       diff_line->action = action;
@@ -101,21 +101,23 @@ smartlist_t *lines_action(smartlist_slice_t *slice, char *line_common, int actio
 smartlist_t* lcs(smartlist_slice_t *slice1, smartlist_slice_t *slice2) {
 
   if (slice1->len == 0) {
-    return lines_action(slice2, NULL, ACTION_ADD);
+    return lines_action(slice2, -1, ACTION_ADD);
   }
 
   if (slice2->len == 0) {
-    return lines_action(slice1, NULL, ACTION_DELETE);
+    return lines_action(slice1, -1, ACTION_DELETE);
   }
 
   if (slice1->len == 1) {
     char *line_common = smartlist_get(slice1->list, slice1->offset);
-    return lines_action(slice2, line_common, ACTION_ADD);
+    int pos_common = smartlist_string_pos(slice2->list, line_common);
+    return lines_action(slice2, pos_common, ACTION_ADD);
   }
 
   if (slice2->len == 1) {
     char *line_common = smartlist_get(slice2->list, slice2->offset);
-    return lines_action(slice1, line_common, ACTION_DELETE);
+    int pos_common = smartlist_string_pos(slice1->list, line_common);
+    return lines_action(slice1, pos_common, ACTION_DELETE);
   }
 
   int mid = slice1->offset+(slice1->len/2);
@@ -186,9 +188,6 @@ int main(int argc, char **argv)
         printf("-%s\n", diff_line->content);
         break;
     }
-  } SMARTLIST_FOREACH_END(diff_line);
-
-  SMARTLIST_FOREACH_BEGIN(result, diff_line_t*, diff_line) {
     tor_free(diff_line);
   } SMARTLIST_FOREACH_END(diff_line);
 
