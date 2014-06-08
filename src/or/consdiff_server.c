@@ -14,7 +14,6 @@ typedef struct {
   smartlist_t *list;
   int offset;
   int len;
-  int direction;
 } smartlist_slice_t;
 
 enum diffaction {
@@ -29,18 +28,7 @@ INLINE smartlist_slice_t* smartlist_slice(smartlist_t *list, int offset, int len
   slice->list = list;
   slice->offset = offset;
   slice->len = len;
-  slice->direction = 1;
   return slice;
-}
-
-INLINE smartlist_slice_t* smartlist_slice_invert(smartlist_slice_t *slice)
-{
-  smartlist_slice_t *slice_inv = tor_malloc(sizeof(smartlist_slice_t));
-  slice_inv->list = slice->list;
-  slice_inv->offset = (slice->offset+(slice->direction*slice->len))-1;
-  slice_inv->len = slice->len;
-  slice_inv->direction = -1*(slice->direction);
-  return slice_inv;
 }
 
 INLINE int max(int a, int b)
@@ -55,20 +43,21 @@ INLINE int line_eq(const char *line1, smartlist_t *list2, int i2)
   return strcmp(line1, line2) == 0;
 }
 
-int* lcs_lens(smartlist_slice_t *slice1, smartlist_slice_t *slice2)
+INLINE int* lcs_lens(smartlist_slice_t *slice1, smartlist_slice_t *slice2, int direction)
 {
   int i, j, si, sj;
-  tor_assert(slice1->direction == slice2->direction);
   int *result = tor_malloc(sizeof(int) * (slice2->len+1));
   for (j = 0; j < slice2->len+1; ++j) result[j] = 0;
   int *prev = tor_malloc(sizeof(int) * (slice2->len+1));
   const char *line1;
   si = slice1->offset;
-  for (i = 0; i < slice1->len; ++i, si+=slice1->direction) {
+  if (direction == -1) si += (slice1->len-1);
+  for (i = 0; i < slice1->len; ++i, si+=direction) {
     for (j = 0; j < slice2->len+1; ++j) prev[j] = result[j];
     line1 = smartlist_get(slice1->list, si);
     sj = slice2->offset;
-    for (j = 0; j < slice2->len; ++j, sj+=slice2->direction) {
+    if (direction == -1) sj += (slice2->len-1);
+    for (j = 0; j < slice2->len; ++j, sj+=direction) {
       if (line_eq(line1, slice2->list, sj)) {
         result[j + 1] = prev[j] + 1;
       } else {
@@ -80,15 +69,14 @@ int* lcs_lens(smartlist_slice_t *slice1, smartlist_slice_t *slice2)
   return result;
 }
 
-smartlist_t *lines_action(smartlist_slice_t *slice, int pos_common, int action) {
+INLINE smartlist_t *lines_action(smartlist_slice_t *slice, int pos_common, int action) {
   smartlist_t *list = smartlist_new();
-  int i, si;
-  si = slice->offset;
-  for (i = 0; i < slice->len; ++i, si+=slice->direction) {
-    char *line = smartlist_get(slice->list, si);
+  int i, end=slice->offset+slice->len;
+  for (i = slice->offset; i < end; ++i) {
+    char *line = smartlist_get(slice->list, i);
     diff_line_t *diff_line = tor_malloc(sizeof(diff_line_t));
     diff_line->content = line;
-    if (si == pos_common) {
+    if (i == pos_common) {
       diff_line->action = ACTION_NONE;
     } else {
       diff_line->action = action;
@@ -126,10 +114,8 @@ smartlist_t* lcs(smartlist_slice_t *slice1, smartlist_slice_t *slice2) {
   smartlist_slice_t *bot = smartlist_slice(slice1->list,
       mid, (slice1->offset+slice1->len)-mid);
 
-  int *lens_top = lcs_lens(top, slice2);
-  smartlist_slice_t *bot_inv = smartlist_slice_invert(bot);
-  smartlist_slice_t *slice2_inv = smartlist_slice_invert(slice2);
-  int *lens_bot = lcs_lens(bot_inv, slice2_inv);
+  int *lens_top = lcs_lens(top, slice2, 1);
+  int *lens_bot = lcs_lens(bot, slice2, -1);
   int j, k=0, max_sum=-1;
   for (j = 0; j < slice2->len+1; ++j) {
     int sum = lens_top[j] + lens_bot[slice2->len-j];
@@ -153,8 +139,6 @@ smartlist_t* lcs(smartlist_slice_t *slice1, smartlist_slice_t *slice2) {
   tor_free(bot);
   tor_free(left);
   tor_free(right);
-  tor_free(bot_inv);
-  tor_free(slice2_inv);
   smartlist_free(lcs2);
   return lcs1;
 }
