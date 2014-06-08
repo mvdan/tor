@@ -43,19 +43,6 @@ INLINE smartlist_slice_t* smartlist_slice_invert(smartlist_slice_t *slice)
   return slice_inv;
 }
 
-INLINE int smartlist_slice_contains_string(smartlist_slice_t *slice,
-    const char *element) {
-  int i, si;
-  si = slice->offset;
-  for (i = 0; i < slice->len; ++i, si+=slice->direction) {
-    const char *s_el = smartlist_get(slice->list, si);
-    if (strcmp(s_el, element) == 0) {
-      return 1;
-    }
-  }
-  return 0;
-}
-
 INLINE int max(int a, int b)
 {
   return (a > b) ? a : b;
@@ -93,15 +80,6 @@ int* lcs_lens(smartlist_slice_t *slice1, smartlist_slice_t *slice2)
   return result;
 }
 
-void print_slice(smartlist_slice_t *slice) {
-  int i, si;
-  si = slice->offset;
-  for (i = 0; i < slice->len; ++i, si+=slice->direction) {
-    printf("%s\n", (const char*)smartlist_get(slice->list, si));
-  }
-  printf("\n");
-}
-
 smartlist_t *lines_action(smartlist_slice_t *slice, char *line_common, int action) {
   smartlist_t *list = smartlist_new();
   int i, si;
@@ -121,8 +99,6 @@ smartlist_t *lines_action(smartlist_slice_t *slice, char *line_common, int actio
 }
 
 smartlist_t* lcs(smartlist_slice_t *slice1, smartlist_slice_t *slice2) {
-  /*print_slice(slice1);*/
-  /*print_slice(slice2);*/
 
   if (slice1->len == 0) {
     return lines_action(slice2, NULL, ACTION_ADD);
