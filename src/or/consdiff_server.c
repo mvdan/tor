@@ -6,8 +6,9 @@
 
 typedef struct {
   const char* content;
-  size_t len;
-} line_t;
+  /*size_t len;*/
+  int action;
+} diff_line_t;
 
 typedef struct {
   smartlist_t *list;
@@ -15,6 +16,12 @@ typedef struct {
   int len;
   int direction;
 } smartlist_slice_t;
+
+enum diffaction {
+  ACTION_NONE,
+  ACTION_ADD,
+  ACTION_DELETE
+};
 
 INLINE smartlist_slice_t* smartlist_slice(smartlist_t *list, int offset, int len)
 {
@@ -40,7 +47,7 @@ INLINE int smartlist_slice_contains_string(smartlist_slice_t *slice,
     const char *element) {
   int i, si;
   si = slice->offset;
-  for (i = 0; i < slice->len; si+=slice->direction) {
+  for (i = 0; i < slice->len; ++i, si+=slice->direction) {
     const char *s_el = smartlist_get(slice->list, si);
     if (strcmp(s_el, element) == 0) {
       return 1;
@@ -89,18 +96,26 @@ int* lcs_lens(smartlist_slice_t *slice1, smartlist_slice_t *slice2)
 void print_slice(smartlist_slice_t *slice) {
   int i, si;
   si = slice->offset;
-  for (i = 0; i < slice->len; si+=slice->direction) {
+  for (i = 0; i < slice->len; ++i, si+=slice->direction) {
     printf("%s\n", (const char*)smartlist_get(slice->list, si));
   }
   printf("\n");
 }
 
-smartlist_t *smartlist_slice_to_list(smartlist_slice_t *slice) {
+smartlist_t *lines_action(smartlist_slice_t *slice, char *line_common, int action) {
   smartlist_t *list = smartlist_new();
   int i, si;
   si = slice->offset;
-  for (i = 0; i < slice->len; si+=slice->direction) {
-    smartlist_add(list, smartlist_get(slice->list, si));
+  for (i = 0; i < slice->len; ++i, si+=slice->direction) {
+    char *line = smartlist_get(slice->list, si);
+    diff_line_t *diff_line = tor_malloc(sizeof(diff_line_t));
+    diff_line->content = line;
+    if (line_common != NULL && strcmp(line, line_common) == 0) {
+      diff_line->action = ACTION_NONE;
+    } else {
+      diff_line->action = action;
+    }
+    smartlist_add(list, diff_line);
   }
   return list;
 }
@@ -110,29 +125,21 @@ smartlist_t* lcs(smartlist_slice_t *slice1, smartlist_slice_t *slice2) {
   /*print_slice(slice2);*/
 
   if (slice1->len == 0) {
-    return smartlist_new();
+    return lines_action(slice2, NULL, ACTION_ADD);
   }
 
   if (slice2->len == 0) {
-    return smartlist_new();
+    return lines_action(slice1, NULL, ACTION_DELETE);
   }
 
   if (slice1->len == 1) {
-    smartlist_t *result = smartlist_new();
-    char *line = smartlist_get(slice1->list, slice1->offset);
-    if (smartlist_slice_contains_string(slice2, line)) {
-      smartlist_add(result, line);
-    }
-    return result;
+    char *line_common = smartlist_get(slice1->list, slice1->offset);
+    return lines_action(slice2, line_common, ACTION_ADD);
   }
 
   if (slice2->len == 1) {
-    smartlist_t *result = smartlist_new();
-    char *line = smartlist_get(slice2->list, slice2->offset);
-    if (smartlist_slice_contains_string(slice1, line)) {
-      smartlist_add(result, line);
-    }
-    return result;
+    char *line_common = smartlist_get(slice2->list, slice2->offset);
+    return lines_action(slice1, line_common, ACTION_DELETE);
   }
 
   int mid = slice1->offset+(slice1->len/2);
@@ -191,9 +198,23 @@ int main(int argc, char **argv)
       tor_split_lines(new, cons2, strlen(cons2)));
   smartlist_t *result = lcs(orig_s, new_s);
 
-  SMARTLIST_FOREACH_BEGIN(result, char *, cp) {
-    printf("%s\n", cp);
-  } SMARTLIST_FOREACH_END(cp);
+  SMARTLIST_FOREACH_BEGIN(result, diff_line_t*, diff_line) {
+    switch(diff_line->action) {
+      case ACTION_NONE:
+        printf(" %s\n", diff_line->content);
+        break;
+      case ACTION_ADD:
+        printf("+%s\n", diff_line->content);
+        break;
+      case ACTION_DELETE:
+        printf("-%s\n", diff_line->content);
+        break;
+    }
+  } SMARTLIST_FOREACH_END(diff_line);
+
+  SMARTLIST_FOREACH_BEGIN(result, diff_line_t*, diff_line) {
+    tor_free(diff_line);
+  } SMARTLIST_FOREACH_END(diff_line);
 
   tor_free(cons1);
   tor_free(cons2);
