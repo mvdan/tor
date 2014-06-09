@@ -6,7 +6,6 @@
 
 typedef struct {
   const char* content;
-  /*size_t len;*/
   int action;
 } diff_line_t;
 
@@ -86,7 +85,7 @@ INLINE smartlist_t *lines_action(smartlist_slice_t *slice, int pos_common, int a
   return list;
 }
 
-smartlist_t* lcs(smartlist_slice_t *slice1, smartlist_slice_t *slice2) {
+smartlist_t* diff(smartlist_slice_t *slice1, smartlist_slice_t *slice2) {
 
   if (slice1->len == 0) {
     return lines_action(slice2, -1, ACTION_ADD);
@@ -132,8 +131,8 @@ smartlist_t* lcs(smartlist_slice_t *slice1, smartlist_slice_t *slice2) {
   smartlist_slice_t *right = smartlist_slice(slice2->list,
       slice2->offset+k, slice2->len-k);
 
-  smartlist_t *lcs1 = lcs(top, left);
-  smartlist_t *lcs2 = lcs(bot, right);
+  smartlist_t *lcs1 = diff(top, left);
+  smartlist_t *lcs2 = diff(bot, right);
   smartlist_add_all(lcs1, lcs2);
   tor_free(top);
   tor_free(bot);
@@ -143,22 +142,29 @@ smartlist_t* lcs(smartlist_slice_t *slice1, smartlist_slice_t *slice2) {
   return lcs1;
 }
 
+smartlist_t* diff_result(smartlist_t *left, smartlist_t *right) {
+  smartlist_slice_t *left_s = smartlist_slice(left, 0, smartlist_len(left));
+  smartlist_slice_t *right_s = smartlist_slice(right, 0, smartlist_len(right));
+  smartlist_t *result = diff(left_s, right_s);
+  tor_free(left_s);
+  tor_free(right_s);
+  return result;
+}
+
 int main(int argc, char **argv)
 {
   smartlist_t *orig = smartlist_new();
   smartlist_t *new = smartlist_new();
-  if (argc < 3) {
+  if (argc != 3) {
     fprintf(stderr, "Usage: %s file1 file2\n", argv[0]);
     return 1;
   }
   char *cons1 = read_file_to_str(argv[1], 0, NULL);
   char *cons2 = read_file_to_str(argv[2], 0, NULL);
 
-  smartlist_slice_t *orig_s = smartlist_slice(orig, 0,
-      tor_split_lines(orig, cons1, strlen(cons1)));
-  smartlist_slice_t *new_s = smartlist_slice(new, 0,
-      tor_split_lines(new, cons2, strlen(cons2)));
-  smartlist_t *result = lcs(orig_s, new_s);
+  tor_split_lines(orig, cons1, strlen(cons1));
+  tor_split_lines(new, cons2, strlen(cons2));
+  smartlist_t *result = diff_result(orig, new);
 
   SMARTLIST_FOREACH_BEGIN(result, diff_line_t*, diff_line) {
     switch(diff_line->action) {
@@ -178,8 +184,6 @@ int main(int argc, char **argv)
   tor_free(cons1);
   tor_free(cons2);
 
-  tor_free(orig_s);
-  tor_free(new_s);
   smartlist_free(orig);
   smartlist_free(new);
   smartlist_free(result);
