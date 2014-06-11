@@ -5,21 +5,17 @@
 #include "container.h"
 
 typedef struct {
-  const char* content;
-  int action;
-} diff_line_t;
+  int added;
+  int deleted;
+  int start1;
+  int start2;
+} change_t;
 
 typedef struct {
   smartlist_t *list;
   int offset;
   int len;
 } smartlist_slice_t;
-
-enum diffaction {
-  ACTION_NONE,
-  ACTION_ADD,
-  ACTION_DELETE
-};
 
 INLINE smartlist_slice_t* smartlist_slice(smartlist_t *list, int offset, int len)
 {
@@ -28,6 +24,17 @@ INLINE smartlist_slice_t* smartlist_slice(smartlist_t *list, int offset, int len
   slice->offset = offset;
   slice->len = len;
   return slice;
+}
+
+INLINE int smartlist_slice_string_pos(smartlist_slice_t *slice, char *string)
+{
+  int i, end = slice->offset + slice->len;
+  char *el;
+  for (i = slice->offset; i < end; ++i) {
+    el = smartlist_get(slice->list, i);
+    if (!strcmp(el, string)) return i;
+  }
+  return -1;
 }
 
 INLINE int max(int a, int b)
@@ -39,7 +46,7 @@ INLINE int line_eq(const char *line1, smartlist_t *list2, int i2)
 {
   const char *line2 = smartlist_get(list2, i2);
   if (line1 == line2) return 0;
-  return strcmp(line1, line2) == 0;
+  return !strcmp(line1, line2);
 }
 
 INLINE int* lcs_lens(smartlist_slice_t *slice1, smartlist_slice_t *slice2, int direction)
@@ -68,86 +75,166 @@ INLINE int* lcs_lens(smartlist_slice_t *slice1, smartlist_slice_t *slice2, int d
   return result;
 }
 
-INLINE smartlist_t *lines_action(smartlist_slice_t *slice, int pos_common, int action) {
-  smartlist_t *list = smartlist_new();
-  int i, end=slice->offset+slice->len;
-  for (i = slice->offset; i < end; ++i) {
-    char *line = smartlist_get(slice->list, i);
-    diff_line_t *diff_line = tor_malloc(sizeof(diff_line_t));
-    diff_line->content = line;
-    if (i == pos_common) {
-      diff_line->action = ACTION_NONE;
-    } else {
-      diff_line->action = action;
-    }
-    smartlist_add(list, diff_line);
-  }
-  return list;
-}
-
-smartlist_t* diff(smartlist_slice_t *slice1, smartlist_slice_t *slice2) {
-
+void diff_recurse(smartlist_slice_t *slice1, smartlist_slice_t *slice2,
+    char *changed1, char *changed2)
+{
+  int j, end;
   if (slice1->len == 0) {
-    return lines_action(slice2, -1, ACTION_ADD);
-  }
-
-  if (slice2->len == 0) {
-    return lines_action(slice1, -1, ACTION_DELETE);
-  }
-
-  if (slice1->len == 1) {
-    char *line_common = smartlist_get(slice1->list, slice1->offset);
-    int pos_common = smartlist_string_pos(slice2->list, line_common);
-    return lines_action(slice2, pos_common, ACTION_ADD);
-  }
-
-  if (slice2->len == 1) {
-    char *line_common = smartlist_get(slice2->list, slice2->offset);
-    int pos_common = smartlist_string_pos(slice1->list, line_common);
-    return lines_action(slice1, pos_common, ACTION_DELETE);
-  }
-
-  int mid = slice1->offset+(slice1->len/2);
-  smartlist_slice_t *top = smartlist_slice(slice1->list,
-      slice1->offset, mid-slice1->offset);
-  smartlist_slice_t *bot = smartlist_slice(slice1->list,
-      mid, (slice1->offset+slice1->len)-mid);
-
-  int *lens_top = lcs_lens(top, slice2, 1);
-  int *lens_bot = lcs_lens(bot, slice2, -1);
-  int j, k=0, max_sum=-1;
-  for (j = 0; j < slice2->len+1; ++j) {
-    int sum = lens_top[j] + lens_bot[slice2->len-j];
-    if (sum > max_sum) {
-      k = j;
-      max_sum = sum;
+    end = slice2->offset + slice2->len;
+    for (j = slice2->offset; j < end; ++j) {
+      changed2[j] = 1;
     }
+
+  } else if (slice2->len == 0) {
+    end = slice1->offset + slice1->len;
+    for (j = slice1->offset; j < end; ++j) {
+      changed1[j] = 1;
+    }
+
+  } else if (slice1->len == 1) {
+    char *line_common = smartlist_get(slice1->list, slice1->offset);
+    int pos_common = smartlist_slice_string_pos(slice2, line_common);
+    end = slice2->offset + slice2->len;
+    for (j = slice2->offset; j < end; ++j) {
+      if (j == pos_common) continue;
+      changed2[j] = 1;
+    }
+
+  } else if (slice2->len == 1) {
+    char *line_common = smartlist_get(slice2->list, slice2->offset);
+    int pos_common = smartlist_slice_string_pos(slice1, line_common);
+    end = slice1->offset + slice1->len;
+    for (j = slice1->offset; j < end; ++j) {
+      if (j == pos_common) continue;
+      changed1[j] = 1;
+    }
+
+  } else {
+
+    int mid = slice1->offset+(slice1->len/2);
+    smartlist_slice_t *top = smartlist_slice(slice1->list,
+        slice1->offset, mid-slice1->offset);
+    smartlist_slice_t *bot = smartlist_slice(slice1->list,
+        mid, (slice1->offset+slice1->len)-mid);
+
+    int *lens_top = lcs_lens(top, slice2, 1);
+    int *lens_bot = lcs_lens(bot, slice2, -1);
+    int k=0, max_sum=-1;
+    for (j = 0; j < slice2->len+1; ++j) {
+      int sum = lens_top[j] + lens_bot[slice2->len-j];
+      if (sum > max_sum) {
+        k = j;
+        max_sum = sum;
+      }
+    }
+    tor_free(lens_top);
+    tor_free(lens_bot);
+
+    smartlist_slice_t *left = smartlist_slice(slice2->list,
+        slice2->offset, k);
+    smartlist_slice_t *right = smartlist_slice(slice2->list,
+        slice2->offset+k, slice2->len-k);
+
+    diff_recurse(top, left, changed1, changed2);
+    diff_recurse(bot, right, changed1, changed2);
+    tor_free(top);
+    tor_free(bot);
+    tor_free(left);
+    tor_free(right);
   }
-  tor_free(lens_top);
-  tor_free(lens_bot);
-
-  smartlist_slice_t *left = smartlist_slice(slice2->list,
-      slice2->offset, k);
-  smartlist_slice_t *right = smartlist_slice(slice2->list,
-      slice2->offset+k, slice2->len-k);
-
-  smartlist_t *lcs1 = diff(top, left);
-  smartlist_t *lcs2 = diff(bot, right);
-  smartlist_add_all(lcs1, lcs2);
-  tor_free(top);
-  tor_free(bot);
-  tor_free(left);
-  tor_free(right);
-  smartlist_free(lcs2);
-  return lcs1;
 }
 
-smartlist_t* diff_result(smartlist_t *left, smartlist_t *right) {
-  smartlist_slice_t *left_s = smartlist_slice(left, 0, smartlist_len(left));
-  smartlist_slice_t *right_s = smartlist_slice(right, 0, smartlist_len(right));
-  smartlist_t *result = diff(left_s, right_s);
-  tor_free(left_s);
-  tor_free(right_s);
+change_t* make_change(int start1, int start2, int end1, int end2)
+{
+  change_t *change = tor_malloc(sizeof(change_t));
+  change->start1 = start1;
+  change->start2 = start2;
+  change->added = end2 - start2;
+  change->deleted = end1 - start1;
+  return change;
+}
+
+smartlist_t* calc_diff(smartlist_t *cons1, smartlist_t *cons2)
+{
+  int len1 = smartlist_len(cons1);
+  int len2 = smartlist_len(cons2);
+  char *changed1 = tor_malloc_zero(sizeof(char) * len1+1);
+  char *changed2 = tor_malloc_zero(sizeof(char) * len2+1);
+  smartlist_slice_t *cons1_sl = smartlist_slice(cons1, 0, len1);
+  smartlist_slice_t *cons2_sl = smartlist_slice(cons2, 0, len2);
+  diff_recurse(cons1_sl, cons2_sl, changed1, changed2);
+  tor_free(cons1_sl);
+  tor_free(cons2_sl);
+  smartlist_t *changes = smartlist_new();
+  int i1=0, i2=0, start1, start2;
+
+  while (i1 < len1 || i2 < len2) {
+    if (changed1[i1] || changed2[i2]) {
+      start1 = i1, start2 = i2;
+
+      while (changed1[i1]) i1++;
+      while (changed2[i2]) i2++;
+
+	  smartlist_add(changes, make_change(start1, start2, i1, i2));
+	}
+    if (i1 < len1) i1++;
+    if (i2 < len2) i2++;
+  }
+  tor_free(changed1);
+  tor_free(changed2);
+
+  smartlist_t *result = smartlist_new();
+
+  int i, j, end;
+  char *line;
+  for (i = smartlist_len(changes)-1; i >= 0; --i) {
+    change_t *change = smartlist_get(changes, i);
+    tor_assert(change->added > 0 || change->deleted > 0);
+    if (change->added == 0) {
+      tor_assert(change->deleted > 0);
+
+      if (change->deleted == 1) {
+        tor_asprintf(&line, "%id", change->start1+1);
+      } else {
+        tor_asprintf(&line, "%i,%id", change->start1+1, change->start1+change->deleted);
+      }
+      smartlist_add(result, line);
+
+    } else if (change->deleted == 0) {
+      tor_assert(change->added > 0);
+
+      tor_asprintf(&line, "%ia", change->start1);
+      smartlist_add(result, line);
+
+      end = change->start2+change->added;
+      for (j = change->start2; j < end; ++j) {
+        line = smartlist_get(cons2, j);
+        smartlist_add(result, tor_strdup(line));
+      }
+
+      smartlist_add(result, tor_strdup("."));
+
+    } else {
+      if (change->deleted == 1) {
+        tor_asprintf(&line, "%ic", change->start1+1);
+      } else {
+        tor_asprintf(&line, "%i,%ic", change->start1+1, change->start1+change->deleted);
+      }
+      smartlist_add(result, line);
+
+      end = change->start2+change->added;
+      for (j = change->start2; j < end; ++j) {
+        line = smartlist_get(cons2, j);
+        smartlist_add(result, tor_strdup(line));
+      }
+
+      smartlist_add(result, tor_strdup("."));
+    }
+
+    tor_free(change);
+  }
+  smartlist_free(changes);
+
   return result;
 }
 
@@ -164,29 +251,18 @@ int main(int argc, char **argv)
 
   tor_split_lines(orig, cons1, strlen(cons1));
   tor_split_lines(new, cons2, strlen(cons2));
-  smartlist_t *result = diff_result(orig, new);
-
-  SMARTLIST_FOREACH_BEGIN(result, diff_line_t*, diff_line) {
-    switch(diff_line->action) {
-      case ACTION_NONE:
-        printf(" %s\n", diff_line->content);
-        break;
-      case ACTION_ADD:
-        printf("+%s\n", diff_line->content);
-        break;
-      case ACTION_DELETE:
-        printf("-%s\n", diff_line->content);
-        break;
-    }
-    tor_free(diff_line);
-  } SMARTLIST_FOREACH_END(diff_line);
+  smartlist_t *diff = calc_diff(orig, new);
+  SMARTLIST_FOREACH_BEGIN(diff, char*, line) {
+    printf("%s\n", line);
+    tor_free(line);
+  } SMARTLIST_FOREACH_END(line);
 
   tor_free(cons1);
   tor_free(cons2);
 
   smartlist_free(orig);
   smartlist_free(new);
-  smartlist_free(result);
+  smartlist_free(diff);
 
   return 0;
 }
