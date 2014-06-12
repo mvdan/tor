@@ -19,10 +19,10 @@ INLINE smartlist_slice_t* smartlist_slice(smartlist_t *list, int offset, int len
   return slice;
 }
 
-INLINE int smartlist_slice_string_pos(smartlist_slice_t *slice, char *string)
+INLINE int smartlist_slice_string_pos(smartlist_slice_t *slice, const char *string)
 {
   int i, end = slice->offset + slice->len;
-  char *el;
+  const char *el;
   for (i = slice->offset; i < end; ++i) {
     el = smartlist_get(slice->list, i);
     if (!strcmp(el, string)) return i;
@@ -80,14 +80,14 @@ void diff_recurse(smartlist_slice_t *slice1, smartlist_slice_t *slice2,
     for (j = slice1->offset; j < end; ++j) changed1[j] = 1;
 
   } else if (slice1->len == 1) {
-    char *line_common = smartlist_get(slice1->list, slice1->offset);
+    const char *line_common = smartlist_get(slice1->list, slice1->offset);
     int pos_common = smartlist_slice_string_pos(slice2, line_common);
     end = slice2->offset + slice2->len;
     for (j = slice2->offset; j < end; ++j)
       if (j != pos_common) changed2[j] = 1;
 
   } else if (slice2->len == 1) {
-    char *line_common = smartlist_get(slice2->list, slice2->offset);
+    const char *line_common = smartlist_get(slice2->list, slice2->offset);
     int pos_common = smartlist_slice_string_pos(slice1, line_common);
     end = slice1->offset + slice1->len;
     for (j = slice1->offset; j < end; ++j)
