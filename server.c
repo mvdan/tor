@@ -26,6 +26,17 @@ INLINE smartlist_slice_t* smartlist_slice(smartlist_t *list, int offset, int len
   return slice;
 }
 
+INLINE int smartlist_slice_string_pos(smartlist_slice_t *slice, char *string)
+{
+  int i, end = slice->offset + slice->len;
+  char *el;
+  for (i = slice->offset; i < end; ++i) {
+    el = smartlist_get(slice->list, i);
+    if (!strcmp(el, string)) return i;
+  }
+  return -1;
+}
+
 INLINE int max(int a, int b)
 {
   return (a > b) ? a : b;
@@ -35,7 +46,7 @@ INLINE int line_eq(const char *line1, smartlist_t *list2, int i2)
 {
   const char *line2 = smartlist_get(list2, i2);
   if (line1 == line2) return 0;
-  return strcmp(line1, line2) == 0;
+  return !strcmp(line1, line2);
 }
 
 INLINE int* lcs_lens(smartlist_slice_t *slice1, smartlist_slice_t *slice2, int direction)
@@ -65,8 +76,8 @@ INLINE int* lcs_lens(smartlist_slice_t *slice1, smartlist_slice_t *slice2, int d
 }
 
 void diff_recurse(smartlist_slice_t *slice1, smartlist_slice_t *slice2,
-    char *changed1, char *changed2) {
-
+    char *changed1, char *changed2)
+{
   int j, end;
   if (slice1->len == 0) {
     end = slice2->offset + slice2->len;
@@ -82,7 +93,7 @@ void diff_recurse(smartlist_slice_t *slice1, smartlist_slice_t *slice2,
 
   } else if (slice1->len == 1) {
     char *line_common = smartlist_get(slice1->list, slice1->offset);
-    int pos_common = smartlist_string_pos(slice2->list, line_common);
+    int pos_common = smartlist_slice_string_pos(slice2, line_common);
     end = slice2->offset + slice2->len;
     for (j = slice2->offset; j < end; ++j) {
       if (j == pos_common) continue;
@@ -91,7 +102,7 @@ void diff_recurse(smartlist_slice_t *slice1, smartlist_slice_t *slice2,
 
   } else if (slice2->len == 1) {
     char *line_common = smartlist_get(slice2->list, slice2->offset);
-    int pos_common = smartlist_string_pos(slice1->list, line_common);
+    int pos_common = smartlist_slice_string_pos(slice1, line_common);
     end = slice1->offset + slice1->len;
     for (j = slice1->offset; j < end; ++j) {
       if (j == pos_common) continue;
@@ -133,7 +144,8 @@ void diff_recurse(smartlist_slice_t *slice1, smartlist_slice_t *slice2,
   }
 }
 
-change_t* make_change(int start1, int start2, int end1, int end2) {
+change_t* make_change(int start1, int start2, int end1, int end2)
+{
   change_t *change = tor_malloc(sizeof(change_t));
   change->start1 = start1;
   change->start2 = start2;
@@ -142,11 +154,12 @@ change_t* make_change(int start1, int start2, int end1, int end2) {
   return change;
 }
 
-smartlist_t* calc_diff(smartlist_t *cons1, smartlist_t *cons2) {
+smartlist_t* calc_diff(smartlist_t *cons1, smartlist_t *cons2)
+{
   int len1 = smartlist_len(cons1);
   int len2 = smartlist_len(cons2);
-  char *changed1 = tor_malloc_zero(sizeof(char) * len1);
-  char *changed2 = tor_malloc_zero(sizeof(char) * len2);
+  char *changed1 = tor_malloc_zero(sizeof(char) * len1+1);
+  char *changed2 = tor_malloc_zero(sizeof(char) * len2+1);
   smartlist_slice_t *cons1_sl = smartlist_slice(cons1, 0, len1);
   smartlist_slice_t *cons2_sl = smartlist_slice(cons2, 0, len2);
   diff_recurse(cons1_sl, cons2_sl, changed1, changed2);
@@ -156,15 +169,16 @@ smartlist_t* calc_diff(smartlist_t *cons1, smartlist_t *cons2) {
   int i1=0, i2=0, start1, start2;
 
   while (i1 < len1 || i2 < len2) {
-    if ((i1 < len1 && changed1[i1]) || (i2 < len2 && changed2[i2])) {
+    if (changed1[i1] || changed2[i2]) {
       start1 = i1, start2 = i2;
 
-      while (i1 < len1 && changed1[i1]) ++i1;
-      while (i2 < len2 && changed2[i2]) ++i2;
+      while (changed1[i1]) i1++;
+      while (changed2[i2]) i2++;
 
 	  smartlist_add(changes, make_change(start1, start2, i1, i2));
 	}
-    i1++, i2++;
+    if (i1 < len1) i1++;
+    if (i2 < len2) i2++;
   }
   tor_free(changed1);
   tor_free(changed2);
@@ -182,7 +196,7 @@ smartlist_t* calc_diff(smartlist_t *cons1, smartlist_t *cons2) {
       if (change->deleted == 1) {
         tor_asprintf(&line, "%id", change->start1+1);
       } else {
-        tor_asprintf(&line, "%i,%id", change->start1+1, change->start1+change->deleted+1);
+        tor_asprintf(&line, "%i,%id", change->start1+1, change->start1+change->deleted);
       }
       smartlist_add(result, line);
 
@@ -198,13 +212,13 @@ smartlist_t* calc_diff(smartlist_t *cons1, smartlist_t *cons2) {
         smartlist_add(result, tor_strdup(line));
       }
 
-      smartlist_add(result, strdup("."));
+      smartlist_add(result, tor_strdup("."));
 
     } else {
       if (change->deleted == 1) {
         tor_asprintf(&line, "%ic", change->start1+1);
       } else {
-        tor_asprintf(&line, "%i,%ic", change->start1+1, change->start1+change->deleted+1);
+        tor_asprintf(&line, "%i,%ic", change->start1+1, change->start1+change->deleted);
       }
       smartlist_add(result, line);
 
@@ -214,7 +228,7 @@ smartlist_t* calc_diff(smartlist_t *cons1, smartlist_t *cons2) {
         smartlist_add(result, tor_strdup(line));
       }
 
-      smartlist_add(result, strdup("."));
+      smartlist_add(result, tor_strdup("."));
     }
 
     tor_free(change);
