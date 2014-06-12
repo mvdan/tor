@@ -83,15 +83,25 @@ void calc_changes(smartlist_slice_t *slice1, smartlist_slice_t *slice2,
     const char *line_common = smartlist_get(slice1->list, slice1->offset);
     int pos_common = smartlist_slice_string_pos(slice2, line_common);
     end = slice2->offset + slice2->len;
-    for (j = slice2->offset; j < end; ++j)
-      if (j != pos_common) changed2[j] = 1;
+    if (pos_common == -1) {
+      changed1[slice1->offset] = 1;
+      for (j = slice2->offset; j < end; ++j) changed2[j] = 1;
+    } else {
+      for (j = slice2->offset; j < end; ++j)
+        if (j != pos_common) changed2[j] = 1;
+    }
 
   } else if (slice2->len == 1) {
     const char *line_common = smartlist_get(slice2->list, slice2->offset);
     int pos_common = smartlist_slice_string_pos(slice1, line_common);
     end = slice1->offset + slice1->len;
-    for (j = slice1->offset; j < end; ++j)
-      if (j != pos_common) changed1[j] = 1;
+    if (pos_common == -1) {
+      changed2[slice2->offset] = 1;
+      for (j = slice1->offset; j < end; ++j) changed1[j] = 1;
+    } else {
+      for (j = slice1->offset; j < end; ++j)
+        if (j != pos_common) changed1[j] = 1;
+    }
 
   } else {
     int mid = slice1->offset+(slice1->len/2);
