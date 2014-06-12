@@ -5,13 +5,6 @@
 #include "container.h"
 
 typedef struct {
-  int added;
-  int deleted;
-  int start1;
-  int start2;
-} change_t;
-
-typedef struct {
   smartlist_t *list;
   int offset;
   int len;
@@ -143,85 +136,64 @@ void diff_recurse(smartlist_slice_t *slice1, smartlist_slice_t *slice2,
   }
 }
 
-change_t* make_change(int start1, int start2, int end1, int end2)
-{
-  change_t *change = tor_malloc(sizeof(change_t));
-  change->start1 = start1;
-  change->start2 = start2;
-  change->added = end2 - start2;
-  change->deleted = end1 - start1;
-  return change;
-}
-
 smartlist_t* calc_diff(smartlist_t *cons1, smartlist_t *cons2)
 {
   int len1 = smartlist_len(cons1);
   int len2 = smartlist_len(cons2);
-  char *changed1 = tor_malloc_zero(sizeof(char) * len1+1);
-  char *changed2 = tor_malloc_zero(sizeof(char) * len2+1);
+  char *changed1 = tor_malloc_zero(sizeof(char) * len1);
+  char *changed2 = tor_malloc_zero(sizeof(char) * len2);
   smartlist_slice_t *cons1_sl = smartlist_slice(cons1, 0, len1);
   smartlist_slice_t *cons2_sl = smartlist_slice(cons2, 0, len2);
+
   diff_recurse(cons1_sl, cons2_sl, changed1, changed2);
   tor_free(cons1_sl);
   tor_free(cons2_sl);
-  smartlist_t *changes = smartlist_new();
-  int i1=0, i2=0, start1, start2;
 
-  while (i1 < len1 || i2 < len2) {
-    if (changed1[i1] || changed2[i2]) {
-      start1 = i1, start2 = i2;
+  int i, i1=len1-1, i2=len2-1;
+  int start1, start2, end1, end2;
+  int added, deleted;
 
-      while (changed1[i1]) i1++;
-      while (changed2[i2]) i2++;
+  smartlist_t *result = smartlist_new();
+  while (i1 > 0 || i2 > 0) {
+    if ((i1 >= 0 && changed1[i1]) || (i2 >= 0 && changed2[i2])) {
+      end1 = i1, end2 = i2;
 
-	  smartlist_add(changes, make_change(start1, start2, i1, i2));
+      while ((i1 >= 0 && changed1[i1])) i1--;
+      while ((i2 >= 0 && changed2[i2])) i2--;
+
+      start1 = i1+1;
+      start2 = i2+1;
+      added = end2-i2;
+      deleted = end1-i1;
+      if (added == 0) {
+        if (deleted == 1) smartlist_add_asprintf(result, "%id", start1+1);
+        else smartlist_add_asprintf(result, "%i,%id", start1+1, start1+deleted);
+
+      } else if (deleted == 0) {
+        smartlist_add_asprintf(result, "%ia", start1);
+
+        for (i = start2; i <= end2; ++i)
+          smartlist_add(result, tor_strdup(smartlist_get(cons2, i)));
+
+        smartlist_add_asprintf(result, ".");
+
+      } else {
+        if (deleted == 1) smartlist_add_asprintf(result, "%ic", start1+1);
+        else smartlist_add_asprintf(result, "%i,%ic", start1+1, start1+deleted);
+
+        for (i = start2; i <= end2; ++i)
+          smartlist_add(result, tor_strdup(smartlist_get(cons2, i)));
+
+        smartlist_add_asprintf(result, ".");
+      }
 	}
-    if (i1 < len1) i1++;
-    if (i2 < len2) i2++;
+
+    if (i1 >= 0) i1--;
+    if (i2 >= 0) i2--;
+
   }
   tor_free(changed1);
   tor_free(changed2);
-
-  smartlist_t *result = smartlist_new();
-
-  int i, j, end;
-  for (i = smartlist_len(changes)-1; i >= 0; --i) {
-    change_t *change = smartlist_get(changes, i);
-    if (change->added == 0) {
-      if (change->deleted == 1) {
-        smartlist_add_asprintf(result, "%id", change->start1+1);
-      } else {
-        smartlist_add_asprintf(result, "%i,%id", change->start1+1, change->start1+change->deleted);
-      }
-
-    } else if (change->deleted == 0) {
-      smartlist_add_asprintf(result, "%ia", change->start1);
-
-      end = change->start2+change->added;
-      for (j = change->start2; j < end; ++j) {
-        smartlist_add(result, tor_strdup(smartlist_get(cons2, j)));
-      }
-
-      smartlist_add_asprintf(result, ".");
-
-    } else {
-      if (change->deleted == 1) {
-        smartlist_add_asprintf(result, "%ic", change->start1+1);
-      } else {
-        smartlist_add_asprintf(result, "%i,%ic", change->start1+1, change->start1+change->deleted);
-      }
-
-      end = change->start2+change->added;
-      for (j = change->start2; j < end; ++j) {
-        smartlist_add(result, tor_strdup(smartlist_get(cons2, j)));
-      }
-
-      smartlist_add_asprintf(result, ".");
-    }
-
-    tor_free(change);
-  }
-  smartlist_free(changes);
 
   return result;
 }
