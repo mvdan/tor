@@ -110,7 +110,6 @@ void diff_recurse(smartlist_slice_t *slice1, smartlist_slice_t *slice2,
     }
 
   } else {
-
     int mid = slice1->offset+(slice1->len/2);
     smartlist_slice_t *top = smartlist_slice(slice1->list,
         slice1->offset, mid-slice1->offset);
@@ -186,49 +185,38 @@ smartlist_t* calc_diff(smartlist_t *cons1, smartlist_t *cons2)
   smartlist_t *result = smartlist_new();
 
   int i, j, end;
-  char *line;
   for (i = smartlist_len(changes)-1; i >= 0; --i) {
     change_t *change = smartlist_get(changes, i);
-    tor_assert(change->added > 0 || change->deleted > 0);
     if (change->added == 0) {
-      tor_assert(change->deleted > 0);
-
       if (change->deleted == 1) {
-        tor_asprintf(&line, "%id", change->start1+1);
+        smartlist_add_asprintf(result, "%id", change->start1+1);
       } else {
-        tor_asprintf(&line, "%i,%id", change->start1+1, change->start1+change->deleted);
+        smartlist_add_asprintf(result, "%i,%id", change->start1+1, change->start1+change->deleted);
       }
-      smartlist_add(result, line);
 
     } else if (change->deleted == 0) {
-      tor_assert(change->added > 0);
-
-      tor_asprintf(&line, "%ia", change->start1);
-      smartlist_add(result, line);
+      smartlist_add_asprintf(result, "%ia", change->start1);
 
       end = change->start2+change->added;
       for (j = change->start2; j < end; ++j) {
-        line = smartlist_get(cons2, j);
-        smartlist_add(result, tor_strdup(line));
+        smartlist_add(result, tor_strdup(smartlist_get(cons2, j)));
       }
 
-      smartlist_add(result, tor_strdup("."));
+      smartlist_add_asprintf(result, ".");
 
     } else {
       if (change->deleted == 1) {
-        tor_asprintf(&line, "%ic", change->start1+1);
+        smartlist_add_asprintf(result, "%ic", change->start1+1);
       } else {
-        tor_asprintf(&line, "%i,%ic", change->start1+1, change->start1+change->deleted);
+        smartlist_add_asprintf(result, "%i,%ic", change->start1+1, change->start1+change->deleted);
       }
-      smartlist_add(result, line);
 
       end = change->start2+change->added;
       for (j = change->start2; j < end; ++j) {
-        line = smartlist_get(cons2, j);
-        smartlist_add(result, tor_strdup(line));
+        smartlist_add(result, tor_strdup(smartlist_get(cons2, j)));
       }
 
-      smartlist_add(result, tor_strdup("."));
+      smartlist_add_asprintf(result, ".");
     }
 
     tor_free(change);
