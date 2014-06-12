@@ -67,7 +67,7 @@ INLINE int* lcs_lens(smartlist_slice_t *slice1, smartlist_slice_t *slice2, int d
   return result;
 }
 
-void diff_recurse(smartlist_slice_t *slice1, smartlist_slice_t *slice2,
+void calc_changes(smartlist_slice_t *slice1, smartlist_slice_t *slice2,
     char *changed1, char *changed2)
 {
   int j, end;
@@ -118,8 +118,8 @@ void diff_recurse(smartlist_slice_t *slice1, smartlist_slice_t *slice2,
     smartlist_slice_t *right = smartlist_slice(slice2->list,
         slice2->offset+k, slice2->len-k);
 
-    diff_recurse(top, left, changed1, changed2);
-    diff_recurse(bot, right, changed1, changed2);
+    calc_changes(top, left, changed1, changed2);
+    calc_changes(bot, right, changed1, changed2);
     tor_free(top);
     tor_free(bot);
     tor_free(left);
@@ -127,7 +127,7 @@ void diff_recurse(smartlist_slice_t *slice1, smartlist_slice_t *slice2,
   }
 }
 
-smartlist_t* calc_diff(smartlist_t *cons1, smartlist_t *cons2)
+smartlist_t* gen_diff(smartlist_t *cons1, smartlist_t *cons2)
 {
   int len1 = smartlist_len(cons1);
   int len2 = smartlist_len(cons2);
@@ -136,7 +136,7 @@ smartlist_t* calc_diff(smartlist_t *cons1, smartlist_t *cons2)
   smartlist_slice_t *cons1_sl = smartlist_slice(cons1, 0, len1);
   smartlist_slice_t *cons2_sl = smartlist_slice(cons2, 0, len2);
 
-  diff_recurse(cons1_sl, cons2_sl, changed1, changed2);
+  calc_changes(cons1_sl, cons2_sl, changed1, changed2);
   tor_free(cons1_sl);
   tor_free(cons2_sl);
 
@@ -202,7 +202,7 @@ int main(int argc, char **argv)
 
   tor_split_lines(orig, cons1, strlen(cons1));
   tor_split_lines(new, cons2, strlen(cons2));
-  smartlist_t *diff = calc_diff(orig, new);
+  smartlist_t *diff = gen_diff(orig, new);
   SMARTLIST_FOREACH_BEGIN(diff, char*, line) {
     printf("%s\n", line);
     tor_free(line);
