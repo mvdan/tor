@@ -45,14 +45,14 @@ INLINE int line_eq(const char *line1, smartlist_t *list2, int i2)
 INLINE int* lcs_lens(smartlist_slice_t *slice1, smartlist_slice_t *slice2, int direction)
 {
   int i, j, si, sj;
-  int *result = tor_malloc(sizeof(int) * (slice2->len+1));
-  for (j = 0; j < slice2->len+1; ++j) result[j] = 0;
-  int *prev = tor_malloc(sizeof(int) * (slice2->len+1));
+  size_t a_len = sizeof(int) * (slice2->len+1);
+  int *result = tor_malloc_zero(a_len);
+  int *prev = tor_malloc(a_len);
   const char *line1;
   si = slice1->offset;
   if (direction == -1) si += (slice1->len-1);
   for (i = 0; i < slice1->len; ++i, si+=direction) {
-    for (j = 0; j < slice2->len+1; ++j) prev[j] = result[j];
+    memcpy(prev, result, a_len);
     line1 = smartlist_get(slice1->list, si);
     sj = slice2->offset;
     if (direction == -1) sj += (slice2->len-1);
