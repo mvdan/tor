@@ -45,14 +45,14 @@ INLINE int line_eq(const char *line1, smartlist_t *list2, int i2)
 INLINE int* lcs_lens(smartlist_slice_t *slice1, smartlist_slice_t *slice2, int direction)
 {
   int i, j, si, sj;
-  size_t a_len = sizeof(int) * (slice2->len+1);
-  int *result = tor_malloc_zero(a_len);
-  int *prev = tor_malloc(a_len);
+  size_t a_size = sizeof(int) * (slice2->len+1);
+  int *result = tor_malloc_zero(a_size);
+  int *prev = tor_malloc(a_size);
   const char *line1;
   si = slice1->offset;
   if (direction == -1) si += (slice1->len-1);
   for (i = 0; i < slice1->len; ++i, si+=direction) {
-    memcpy(prev, result, a_len);
+    memcpy(prev, result, a_size);
     line1 = smartlist_get(slice1->list, si);
     sj = slice2->offset;
     if (direction == -1) sj += (slice2->len-1);
@@ -70,14 +70,14 @@ INLINE int* lcs_lens(smartlist_slice_t *slice1, smartlist_slice_t *slice2, int d
 void calc_changes(smartlist_slice_t *slice1, smartlist_slice_t *slice2,
     char *changed1, char *changed2)
 {
-  int j, end;
+  int i, end;
   if (slice1->len == 0) {
     end = slice2->offset + slice2->len;
-    for (j = slice2->offset; j < end; ++j) changed2[j] = 1;
+    for (i = slice2->offset; i < end; ++i) changed2[i] = 1;
 
   } else if (slice2->len == 0) {
     end = slice1->offset + slice1->len;
-    for (j = slice1->offset; j < end; ++j) changed1[j] = 1;
+    for (i = slice1->offset; i < end; ++i) changed1[i] = 1;
 
   } else if (slice1->len == 1) {
     const char *line_common = smartlist_get(slice1->list, slice1->offset);
@@ -85,10 +85,10 @@ void calc_changes(smartlist_slice_t *slice1, smartlist_slice_t *slice2,
     end = slice2->offset + slice2->len;
     if (pos_common == -1) {
       changed1[slice1->offset] = 1;
-      for (j = slice2->offset; j < end; ++j) changed2[j] = 1;
+      for (i = slice2->offset; i < end; ++i) changed2[i] = 1;
     } else {
-      for (j = slice2->offset; j < end; ++j)
-        if (j != pos_common) changed2[j] = 1;
+      for (i = slice2->offset; i < end; ++i)
+        if (i != pos_common) changed2[i] = 1;
     }
 
   } else if (slice2->len == 1) {
@@ -97,10 +97,10 @@ void calc_changes(smartlist_slice_t *slice1, smartlist_slice_t *slice2,
     end = slice1->offset + slice1->len;
     if (pos_common == -1) {
       changed2[slice2->offset] = 1;
-      for (j = slice1->offset; j < end; ++j) changed1[j] = 1;
+      for (i = slice1->offset; i < end; ++i) changed1[i] = 1;
     } else {
-      for (j = slice1->offset; j < end; ++j)
-        if (j != pos_common) changed1[j] = 1;
+      for (i = slice1->offset; i < end; ++i)
+        if (i != pos_common) changed1[i] = 1;
     }
 
   } else {
@@ -113,10 +113,10 @@ void calc_changes(smartlist_slice_t *slice1, smartlist_slice_t *slice2,
     int *lens_top = lcs_lens(top, slice2, 1);
     int *lens_bot = lcs_lens(bot, slice2, -1);
     int k=0, max_sum=-1;
-    for (j = 0; j < slice2->len+1; ++j) {
-      int sum = lens_top[j] + lens_bot[slice2->len-j];
+    for (i = 0; i < slice2->len+1; ++i) {
+      int sum = lens_top[i] + lens_bot[slice2->len-i];
       if (sum > max_sum) {
-        k = j;
+        k = i;
         max_sum = sum;
       }
     }
