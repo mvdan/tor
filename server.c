@@ -159,8 +159,8 @@ smartlist_t* gen_diff(smartlist_t *cons1, smartlist_t *cons2)
     if ((i1 >= 0 && changed1[i1]) || (i2 >= 0 && changed2[i2])) {
       end1 = i1, end2 = i2;
 
-      while ((i1 >= 0 && changed1[i1])) i1--;
-      while ((i2 >= 0 && changed2[i2])) i2--;
+      while (i1 >= 0 && changed1[i1]) i1--;
+      while (i2 >= 0 && changed2[i2]) i2--;
 
       start1 = i1+1;
       start2 = i2+1;
