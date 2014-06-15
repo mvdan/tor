@@ -164,7 +164,8 @@ void calc_changes(smartlist_slice_t *slice1, smartlist_slice_t *slice2,
   }
 }
 
-INLINE int next_router(smartlist_t *cons, int cur) {
+INLINE int next_router(smartlist_t *cons, int cur)
+{
   const char *line = smartlist_get(cons, ++cur);
   int len = smartlist_len(cons);
   while (cur < len && strncmp("r ", line, 2))
@@ -172,13 +173,15 @@ INLINE int next_router(smartlist_t *cons, int cur) {
   return cur;
 }
 
-INLINE const char* get_hash(const char *line) {
+INLINE const char* get_hash(const char *line)
+{
   const char *c=line+strlen("r ")+1;
   while (*c != ' ') c++;
   return ++c;
 }
 
-INLINE int hashcmp(const char *hash1, const char *hash2) {
+INLINE int hashcmp(const char *hash1, const char *hash2)
+{
   if (hash1 == NULL && hash2 == NULL) return 0;
   return strncmp(hash1, hash2, 27);
 }
