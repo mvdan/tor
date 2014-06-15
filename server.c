@@ -182,7 +182,6 @@ INLINE const char* get_hash(const char *line)
 
 INLINE int hashcmp(const char *hash1, const char *hash2)
 {
-  if (hash1 == NULL && hash2 == NULL) return 0;
   return strncmp(hash1, hash2, 27);
 }
 
@@ -192,7 +191,7 @@ smartlist_t* gen_diff(smartlist_t *cons1, smartlist_t *cons2)
   int len2 = smartlist_len(cons2);
   char *changed1 = tor_malloc_zero(sizeof(char) * len1);
   char *changed2 = tor_malloc_zero(sizeof(char) * len2);
-  int i, i1=0, i2=0;
+  int i1=0, i2=0;
   int start1, start2;
 
   const char *line1 = smartlist_get(cons1, i1);
@@ -254,48 +253,49 @@ smartlist_t* gen_diff(smartlist_t *cons1, smartlist_t *cons2)
   }
 
   i1=len1-1, i2=len2-1;
-  int end1, end2;
+  int i, end1, end2;
   int added, deleted;
 
   smartlist_t *result = smartlist_new();
   while (i1 > 0 || i2 > 0) {
-    if ((i1 >= 0 && changed1[i1]) || (i2 >= 0 && changed2[i2])) {
-      end1 = i1, end2 = i2;
+    if (!(i1 >= 0 && changed1[i1]) && !(i2 >= 0 && changed2[i2])) {
+      if (i1 >= 0) i1--;
+      if (i2 >= 0) i2--;
+      continue;
+    }
 
-      while (i1 >= 0 && changed1[i1]) i1--;
-      while (i2 >= 0 && changed2[i2]) i2--;
+    end1 = i1, end2 = i2;
 
-      start1 = i1+1;
-      start2 = i2+1;
-      added = end2-i2;
-      deleted = end1-i1;
-      if (added == 0) {
-        if (deleted == 1) smartlist_add_asprintf(result, "%id", start1+1);
-        else smartlist_add_asprintf(result, "%i,%id", start1+1, start1+deleted);
+    while (i1 >= 0 && changed1[i1]) i1--;
+    while (i2 >= 0 && changed2[i2]) i2--;
 
-      } else if (deleted == 0) {
-        smartlist_add_asprintf(result, "%ia", start1);
+    start1 = i1+1;
+    start2 = i2+1;
+    added = end2-i2;
+    deleted = end1-i1;
+    if (added == 0) {
+      if (deleted == 1) smartlist_add_asprintf(result, "%id", start1+1);
+      else smartlist_add_asprintf(result, "%i,%id", start1+1, start1+deleted);
 
-        for (i = start2; i <= end2; ++i)
-          smartlist_add(result, tor_strdup(smartlist_get(cons2, i)));
+    } else if (deleted == 0) {
+      smartlist_add_asprintf(result, "%ia", start1);
 
-        smartlist_add_asprintf(result, ".");
+      for (i = start2; i <= end2; ++i)
+        smartlist_add(result, tor_strdup(smartlist_get(cons2, i)));
 
-      } else {
-        if (deleted == 1) smartlist_add_asprintf(result, "%ic", start1+1);
-        else smartlist_add_asprintf(result, "%i,%ic", start1+1, start1+deleted);
+      smartlist_add_asprintf(result, ".");
 
-        for (i = start2; i <= end2; ++i)
-          smartlist_add(result, tor_strdup(smartlist_get(cons2, i)));
+    } else {
+      if (deleted == 1) smartlist_add_asprintf(result, "%ic", start1+1);
+      else smartlist_add_asprintf(result, "%i,%ic", start1+1, start1+deleted);
 
-        smartlist_add_asprintf(result, ".");
-      }
-	}
+      for (i = start2; i <= end2; ++i)
+        smartlist_add(result, tor_strdup(smartlist_get(cons2, i)));
 
-    if (i1 >= 0) i1--;
-    if (i2 >= 0) i2--;
-
+      smartlist_add_asprintf(result, ".");
+    }
   }
+
   tor_free(changed1);
   tor_free(changed2);
 
