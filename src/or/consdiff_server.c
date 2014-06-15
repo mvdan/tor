@@ -218,19 +218,22 @@ smartlist_t* gen_diff(smartlist_t *cons1, smartlist_t *cons2)
     }
 
     int cmp = hashcmp(hash1, hash2);
-    while (i1 < len1 && cmp < 0) {
-      i1 = next_router(cons1, i1);
-      if (i1 == len1) break;
-      line1 = smartlist_get(cons1, i1);
-      hash1 = get_hash(line1);
-      cmp = hashcmp(hash1, hash2);
-    }
-    while (i2 < len2 && cmp > 0) {
-      i2 = next_router(cons2, i2);
-      if (i2 == len2) break;
-      line2 = smartlist_get(cons2, i2);
-      hash2 = get_hash(line2);
-      cmp = hashcmp(hash1, hash2);
+    while (cmp != 0) {
+      while (i1 < len1 && cmp < 0) {
+        i1 = next_router(cons1, i1);
+        if (i1 == len1) break;
+        line1 = smartlist_get(cons1, i1);
+        hash1 = get_hash(line1);
+        cmp = hashcmp(hash1, hash2);
+      }
+      while (i2 < len2 && cmp > 0) {
+        i2 = next_router(cons2, i2);
+        if (i2 == len2) break;
+        line2 = smartlist_get(cons2, i2);
+        hash2 = get_hash(line2);
+        cmp = hashcmp(hash1, hash2);
+      }
+      if (i1 == len1 || i2 == len2) break;
     }
 
     smartlist_slice_t *cons1_sl = smartlist_slice(cons1, start1, i1-start1);
