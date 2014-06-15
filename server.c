@@ -164,21 +164,85 @@ void calc_changes(smartlist_slice_t *slice1, smartlist_slice_t *slice2,
   }
 }
 
+INLINE int next_router(smartlist_t *cons, int cur) {
+  const char *line = smartlist_get(cons, ++cur);
+  int len = smartlist_len(cons);
+  while (cur < len && strncmp("r ", line, 2))
+    line = smartlist_get(cons, ++cur);
+  return cur;
+}
+
+INLINE const char* get_hash(const char *line) {
+  const char *c=line+strlen("r ")+1;
+  while (*c != ' ') c++;
+  return ++c;
+}
+
+INLINE int hashcmp(const char *hash1, const char *hash2) {
+  if (hash1 == NULL && hash2 == NULL) return 0;
+  return strncmp(hash1, hash2, 27);
+}
+
 smartlist_t* gen_diff(smartlist_t *cons1, smartlist_t *cons2)
 {
   int len1 = smartlist_len(cons1);
   int len2 = smartlist_len(cons2);
   char *changed1 = tor_malloc_zero(sizeof(char) * len1);
   char *changed2 = tor_malloc_zero(sizeof(char) * len2);
-  smartlist_slice_t *cons1_sl = smartlist_slice(cons1, 0, len1);
-  smartlist_slice_t *cons2_sl = smartlist_slice(cons2, 0, len2);
+  int i, i1=0, i2=0;
+  int start1, start2;
 
-  calc_changes(cons1_sl, cons2_sl, changed1, changed2);
-  tor_free(cons1_sl);
-  tor_free(cons2_sl);
+  const char *line1 = smartlist_get(cons1, i1);
+  const char *line2 = smartlist_get(cons2, i2);
+  const char *hash1 = NULL;
+  const char *hash2 = NULL;
 
-  int i, i1=len1-1, i2=len2-1;
-  int start1, start2, end1, end2;
+  while (i1 < len1 || i2 < len2) {
+    start1 = i1;
+    start2 = i2;
+
+    if (i1 < len1) {
+      i1 = next_router(cons1, i1);
+      if (i1 != len1) {
+        line1 = smartlist_get(cons1, i1);
+        hash1 = get_hash(line1);
+      }
+    }
+
+    if (i2 < len2) {
+      i2 = next_router(cons2, i2);
+      if (i2 != len2) {
+        line2 = smartlist_get(cons2, i2);
+        hash2 = get_hash(line2);
+      }
+    }
+
+    int cmp = hashcmp(hash1, hash2);
+    while (i1 < len1 && cmp < 0) {
+      i1 = next_router(cons1, i1);
+      if (i1 == len1) break;
+      line1 = smartlist_get(cons1, i1);
+      hash1 = get_hash(line1);
+      cmp = hashcmp(hash1, hash2);
+    }
+    while (i2 < len2 && cmp > 0) {
+      i2 = next_router(cons2, i2);
+      if (i2 == len2) break;
+      line2 = smartlist_get(cons2, i2);
+      hash2 = get_hash(line2);
+      cmp = hashcmp(hash1, hash2);
+    }
+
+    smartlist_slice_t *cons1_sl = smartlist_slice(cons1, start1, i1-start1);
+    smartlist_slice_t *cons2_sl = smartlist_slice(cons2, start2, i2-start2);
+    calc_changes(cons1_sl, cons2_sl, changed1, changed2);
+    tor_free(cons1_sl);
+    tor_free(cons2_sl);
+
+  }
+
+  i1=len1-1, i2=len2-1;
+  int end1, end2;
   int added, deleted;
 
   smartlist_t *result = smartlist_new();
