@@ -81,7 +81,7 @@ INLINE void trim_slices(smartlist_slice_t *slice1, smartlist_slice_t *slice2) {
   int i1 = (slice1->offset+slice1->len)-1;
   int i2 = (slice2->offset+slice2->len)-1;
   line1 = smartlist_get(slice1->list, i1);
-  line2 = smartlist_get(slice1->list, i2);
+  line2 = smartlist_get(slice2->list, i2);
 
   while (slice1->len>0 && slice2->len>0 && !strcmp(line1, line2)) {
     i1--; slice1->len--;
