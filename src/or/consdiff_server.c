@@ -23,9 +23,8 @@ INLINE int smartlist_slice_string_pos(smartlist_slice_t *slice,
     const char *string)
 {
   int i, end = slice->offset + slice->len;
-  const char *el;
   for (i = slice->offset; i < end; ++i) {
-    el = smartlist_get(slice->list, i);
+    const char *el = smartlist_get(slice->list, i);
     if (!strcmp(el, string)) return i;
   }
   return -1;
@@ -50,12 +49,11 @@ INLINE int* lcs_lens(smartlist_slice_t *slice1, smartlist_slice_t *slice2,
   size_t a_size = sizeof(int) * (slice2->len+1);
   int *result = tor_malloc_zero(a_size);
   int *prev = tor_malloc(a_size);
-  const char *line1;
   si = slice1->offset;
   if (direction == -1) si += (slice1->len-1);
   for (i = 0; i < slice1->len; ++i, si+=direction) {
     memcpy(prev, result, a_size);
-    line1 = smartlist_get(slice1->list, si);
+    const char *line1 = smartlist_get(slice1->list, si);
     sj = slice2->offset;
     if (direction == -1) sj += (slice2->len-1);
     for (j = 0; j < slice2->len; ++j, sj+=direction) {
@@ -190,14 +188,12 @@ smartlist_t* gen_diff(smartlist_t *cons1, smartlist_t *cons2)
   char *changed1 = tor_malloc_zero(sizeof(char) * len1);
   char *changed2 = tor_malloc_zero(sizeof(char) * len2);
   int i1=0, i2=0;
-  int start1, start2;
 
   const char *hash1 = NULL;
   const char *hash2 = NULL;
 
   while (i1 < len1 || i2 < len2) {
-    start1 = i1;
-    start2 = i2;
+    int start1 = i1, start2 = i2;
 
     if (i1 < len1) {
       i1 = next_router(cons1, i1);
@@ -239,8 +235,6 @@ smartlist_t* gen_diff(smartlist_t *cons1, smartlist_t *cons2)
   }
 
   i1=len1-1, i2=len2-1;
-  int i, end1, end2;
-  int added, deleted;
 
   smartlist_t *result = smartlist_new();
   while (i1 > 0 || i2 > 0) {
@@ -250,15 +244,14 @@ smartlist_t* gen_diff(smartlist_t *cons1, smartlist_t *cons2)
       continue;
     }
 
-    end1 = i1, end2 = i2;
+    int end1 = i1, end2 = i2;
 
     while (i1 >= 0 && changed1[i1]) i1--;
     while (i2 >= 0 && changed2[i2]) i2--;
 
-    start1 = i1+1;
-    start2 = i2+1;
-    added = end2-i2;
-    deleted = end1-i1;
+    int i;
+    int start1 = i1+1, start2 = i2+1;
+    int added = end2-i2, deleted = end1-i1;
     if (added == 0) {
       if (deleted == 1) smartlist_add_asprintf(result, "%id", start1+1);
       else smartlist_add_asprintf(result, "%i,%id", start1+1, start1+deleted);
