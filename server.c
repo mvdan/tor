@@ -10,7 +10,8 @@ typedef struct {
   int len;
 } smartlist_slice_t;
 
-INLINE smartlist_slice_t* smartlist_slice(smartlist_t *list, int offset, int len)
+INLINE smartlist_slice_t *
+smartlist_slice(smartlist_t *list, int offset, int len)
 {
   smartlist_slice_t *slice = tor_malloc(sizeof(smartlist_slice_t));
   slice->list = list;
@@ -19,8 +20,8 @@ INLINE smartlist_slice_t* smartlist_slice(smartlist_t *list, int offset, int len
   return slice;
 }
 
-INLINE int smartlist_slice_string_pos(smartlist_slice_t *slice,
-    const char *string)
+INLINE int
+smartlist_slice_string_pos(smartlist_slice_t *slice, const char *string)
 {
   int i, end = slice->offset + slice->len;
   for (i = slice->offset; i < end; ++i) {
@@ -30,20 +31,22 @@ INLINE int smartlist_slice_string_pos(smartlist_slice_t *slice,
   return -1;
 }
 
-INLINE int max(int a, int b)
+INLINE int
+max(int a, int b)
 {
   return (a > b) ? a : b;
 }
 
-INLINE int line_eq(const char *line1, smartlist_t *list2, int i2)
+INLINE int
+line_eq(const char *line1, smartlist_t *list2, int i2)
 {
   const char *line2 = smartlist_get(list2, i2);
   if (line1 == line2) return 0;
   return !strcmp(line1, line2);
 }
 
-INLINE int* lcs_lens(smartlist_slice_t *slice1, smartlist_slice_t *slice2,
-    int direction)
+INLINE int *
+lcs_lens(smartlist_slice_t *slice1, smartlist_slice_t *slice2, int direction)
 {
   int i, j, si, sj;
   size_t a_size = sizeof(int) * (slice2->len+1);
@@ -67,7 +70,8 @@ INLINE int* lcs_lens(smartlist_slice_t *slice1, smartlist_slice_t *slice2,
   return result;
 }
 
-INLINE void trim_slices(smartlist_slice_t *slice1, smartlist_slice_t *slice2)
+INLINE void
+trim_slices(smartlist_slice_t *slice1, smartlist_slice_t *slice2)
 {
   const char *line1 = smartlist_get(slice1->list, slice1->offset);
   const char *line2 = smartlist_get(slice2->list, slice2->offset);
@@ -94,8 +98,9 @@ INLINE void trim_slices(smartlist_slice_t *slice1, smartlist_slice_t *slice2)
 }
 
 // slice1 is the one with length 0 or 1
-INLINE void set_changed(char *changed1, char *changed2,
-        smartlist_slice_t *slice1, smartlist_slice_t *slice2)
+INLINE void
+set_changed(char *changed1, char *changed2,
+    smartlist_slice_t *slice1, smartlist_slice_t *slice2)
 {
   int toskip = -1;
   if (slice1->len == 1) {
@@ -108,7 +113,8 @@ INLINE void set_changed(char *changed1, char *changed2,
     if (i != toskip) changed2[i] = 1;
 }
 
-void calc_changes(smartlist_slice_t *slice1, smartlist_slice_t *slice2,
+void
+calc_changes(smartlist_slice_t *slice1, smartlist_slice_t *slice2,
     char *changed1, char *changed2)
 {
   trim_slices(slice1, slice2);
@@ -159,7 +165,8 @@ void calc_changes(smartlist_slice_t *slice1, smartlist_slice_t *slice2,
   }
 }
 
-INLINE int next_router(smartlist_t *cons, int cur)
+INLINE int
+next_router(smartlist_t *cons, int cur)
 {
   const char *line = smartlist_get(cons, ++cur);
   int len = smartlist_len(cons);
@@ -168,7 +175,8 @@ INLINE int next_router(smartlist_t *cons, int cur)
   return cur;
 }
 
-INLINE const char* get_hash(smartlist_t *cons, int line_num)
+INLINE const char *
+get_hash(smartlist_t *cons, int line_num)
 {
   const char *line = smartlist_get(cons, line_num);
   const char *c=line+strlen("r ")+1;
@@ -176,12 +184,14 @@ INLINE const char* get_hash(smartlist_t *cons, int line_num)
   return ++c;
 }
 
-INLINE int hashcmp(const char *hash1, const char *hash2)
+INLINE int
+hashcmp(const char *hash1, const char *hash2)
 {
   return strncmp(hash1, hash2, 27);
 }
 
-smartlist_t* gen_diff(smartlist_t *cons1, smartlist_t *cons2)
+smartlist_t *
+gen_diff(smartlist_t *cons1, smartlist_t *cons2)
 {
   int len1 = smartlist_len(cons1);
   int len2 = smartlist_len(cons2);
@@ -281,7 +291,8 @@ smartlist_t* gen_diff(smartlist_t *cons1, smartlist_t *cons2)
   return result;
 }
 
-int main(int argc, char **argv)
+int
+main(int argc, char **argv)
 {
   smartlist_t *orig = smartlist_new();
   smartlist_t *new = smartlist_new();
