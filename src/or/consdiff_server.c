@@ -165,29 +165,43 @@ calc_changes(smartlist_slice_t *slice1, smartlist_slice_t *slice2,
   }
 }
 
+// It will return NULL if an identity hash could not be obtained from it.
+INLINE const char *
+get_id_hash(const char *r_line)
+{
+  r_line += strlen("r ");
+  const char *hash = strchr(r_line, ' ');
+  if (hash == NULL) return NULL;
+  hash++;
+  const char *hash_end = strchr(hash, ' ');
+  if (hash_end == NULL) return NULL;
+  if (hash_end-hash < 27) return NULL;
+  return hash;
+}
+
+INLINE int
+is_valid_router_entry(const char *line)
+{
+  if (strncmp("r ", line, 2) != 0) return 0;
+  return (get_id_hash(line) != NULL);
+}
+
 INLINE int
 next_router(smartlist_t *cons, int cur)
 {
   const char *line = smartlist_get(cons, ++cur);
   int len = smartlist_len(cons);
-  while (cur < len && strncmp("r ", line, 2))
+  while (cur < len && !is_valid_router_entry(line))
     line = smartlist_get(cons, ++cur);
   return cur;
-}
-
-INLINE const char *
-get_hash(smartlist_t *cons, int line_num)
-{
-  const char *line = smartlist_get(cons, line_num);
-  const char *c=line+strlen("r ")+1;
-  while (*c != ' ') c++;
-  return ++c;
 }
 
 INLINE int
 hashcmp(const char *hash1, const char *hash2)
 {
-  return strncmp(hash1, hash2, 27);
+  int len1 = strchr(hash1, ' ')-hash1;
+  int len2 = strchr(hash2, ' ')-hash2;
+  return strncmp(hash1, hash2, max(len1, len2));
 }
 
 smartlist_t *
@@ -207,12 +221,12 @@ gen_diff(smartlist_t *cons1, smartlist_t *cons2)
 
     if (i1 < len1) {
       i1 = next_router(cons1, i1);
-      if (i1 != len1) hash1 = get_hash(cons1, i1);
+      if (i1 != len1) hash1 = get_id_hash(smartlist_get(cons1, i1));
     }
 
     if (i2 < len2) {
       i2 = next_router(cons2, i2);
-      if (i2 != len2) hash2 = get_hash(cons2, i2);
+      if (i2 != len2) hash2 = get_id_hash(smartlist_get(cons2, i2));
     }
 
     int cmp = hashcmp(hash1, hash2);
@@ -223,7 +237,7 @@ gen_diff(smartlist_t *cons1, smartlist_t *cons2)
           i2 = len2;
           break;
         }
-        hash1 = get_hash(cons1, i1);
+        hash1 = get_id_hash(smartlist_get(cons1, i1));
       }
       if (i2 < len2 && cmp > 0) {
         i2 = next_router(cons2, i2);
@@ -231,7 +245,7 @@ gen_diff(smartlist_t *cons1, smartlist_t *cons2)
           i1 = len1;
           break;
         }
-        hash2 = get_hash(cons2, i2);
+        hash2 = get_id_hash(smartlist_get(cons2, i2));
       }
       cmp = hashcmp(hash1, hash2);
     }
@@ -259,7 +273,6 @@ gen_diff(smartlist_t *cons1, smartlist_t *cons2)
     while (i1 >= 0 && changed1[i1]) i1--;
     while (i2 >= 0 && changed2[i2]) i2--;
 
-    int i;
     int start1 = i1+1, start2 = i2+1;
     int added = end2-i2, deleted = end1-i1;
     if (added == 0) {
@@ -269,6 +282,7 @@ gen_diff(smartlist_t *cons1, smartlist_t *cons2)
     } else if (deleted == 0) {
       smartlist_add_asprintf(result, "%ia", start1);
 
+      int i;
       for (i = start2; i <= end2; ++i)
         smartlist_add(result, tor_strdup(smartlist_get(cons2, i)));
 
@@ -278,6 +292,7 @@ gen_diff(smartlist_t *cons1, smartlist_t *cons2)
       if (deleted == 1) smartlist_add_asprintf(result, "%ic", start1+1);
       else smartlist_add_asprintf(result, "%i,%ic", start1+1, start1+deleted);
 
+      int i;
       for (i = start2; i <= end2; ++i)
         smartlist_add(result, tor_strdup(smartlist_get(cons2, i)));
 
