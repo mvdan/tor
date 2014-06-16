@@ -19,7 +19,8 @@ INLINE smartlist_slice_t* smartlist_slice(smartlist_t *list, int offset, int len
   return slice;
 }
 
-INLINE int smartlist_slice_string_pos(smartlist_slice_t *slice, const char *string)
+INLINE int smartlist_slice_string_pos(smartlist_slice_t *slice,
+    const char *string)
 {
   int i, end = slice->offset + slice->len;
   const char *el;
@@ -42,7 +43,8 @@ INLINE int line_eq(const char *line1, smartlist_t *list2, int i2)
   return !strcmp(line1, line2);
 }
 
-INLINE int* lcs_lens(smartlist_slice_t *slice1, smartlist_slice_t *slice2, int direction)
+INLINE int* lcs_lens(smartlist_slice_t *slice1, smartlist_slice_t *slice2,
+    int direction)
 {
   int i, j, si, sj;
   size_t a_size = sizeof(int) * (slice2->len+1);
@@ -67,7 +69,8 @@ INLINE int* lcs_lens(smartlist_slice_t *slice1, smartlist_slice_t *slice2, int d
   return result;
 }
 
-INLINE void trim_slices(smartlist_slice_t *slice1, smartlist_slice_t *slice2) {
+INLINE void trim_slices(smartlist_slice_t *slice1, smartlist_slice_t *slice2)
+{
   const char *line1 = smartlist_get(slice1->list, slice1->offset);
   const char *line2 = smartlist_get(slice2->list, slice2->offset);
 
