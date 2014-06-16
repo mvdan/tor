@@ -160,7 +160,7 @@ calc_changes(smartlist_slice_t *slice1, smartlist_slice_t *slice2,
 }
 
 // It will return NULL if an identity hash could not be obtained from it.
-INLINE const char *
+const char *
 get_id_hash(const char *r_line)
 {
   r_line += strlen("r ");
@@ -193,21 +193,24 @@ next_router(smartlist_t *cons, int cur)
 INLINE int
 hashcmp(const char *hash1, const char *hash2)
 {
+  if (hash1 == NULL || hash2 == NULL) return -1;
   int len1 = strchr(hash1, ' ')-hash1;
   int len2 = strchr(hash2, ' ')-hash2;
   return strncmp(hash1, hash2, MAX(len1, len2));
 }
 
-INLINE void
+INLINE int
 add_lines(smartlist_t *result, smartlist_t *cons,
     int start, int end)
 {
   int i;
   for (i = start; i <= end; ++i) {
     const char *line = smartlist_get(cons, i);
+    if (!strcmp(line, ".")) return -1;
     smartlist_add(result, tor_strdup(line));
   }
   smartlist_add_asprintf(result, ".");
+  return 0;
 }
 
 smartlist_t *
@@ -236,7 +239,7 @@ gen_diff(smartlist_t *cons1, smartlist_t *cons2)
     }
 
     int cmp = hashcmp(hash1, hash2);
-    while (cmp != 0) {
+    while ((i1 < len1 || i2 < len2) && cmp != 0) {
       if (i1 < len1 && cmp < 0) {
         i1 = next_router(cons1, i1);
         if (i1 == len1) {
@@ -288,13 +291,13 @@ gen_diff(smartlist_t *cons1, smartlist_t *cons2)
     } else if (deleted == 0) {
       smartlist_add_asprintf(result, "%ia", start1);
 
-      add_lines(result, cons2, start2, end2);
+      if (add_lines(result, cons2, start2, end2) < 0) goto error_cleanup;
 
     } else {
       if (deleted == 1) smartlist_add_asprintf(result, "%ic", start1+1);
       else smartlist_add_asprintf(result, "%i,%ic", start1+1, start1+deleted);
 
-      add_lines(result, cons2, start2, end2);
+      if (add_lines(result, cons2, start2, end2) < 0) goto error_cleanup;
     }
   }
 
@@ -302,6 +305,19 @@ gen_diff(smartlist_t *cons1, smartlist_t *cons2)
   tor_free(changed2);
 
   return result;
+
+error_cleanup:
+
+  tor_free(changed1);
+  tor_free(changed2);
+
+  SMARTLIST_FOREACH_BEGIN(result, char*, line) {
+    tor_free(line);
+  } SMARTLIST_FOREACH_END(line);
+
+  smartlist_free(result);
+
+  return NULL;
 }
 
 int
@@ -319,17 +335,21 @@ main(int argc, char **argv)
   tor_split_lines(orig, cons1, strlen(cons1));
   tor_split_lines(new, cons2, strlen(cons2));
   smartlist_t *diff = gen_diff(orig, new);
-  SMARTLIST_FOREACH_BEGIN(diff, char*, line) {
-    printf("%s\n", line);
-    tor_free(line);
-  } SMARTLIST_FOREACH_END(line);
+  if (diff == NULL) {
+    fprintf(stderr, "Something went wrong.\n");
+  } else {
+    SMARTLIST_FOREACH_BEGIN(diff, char*, line) {
+      printf("%s\n", line);
+      tor_free(line);
+    } SMARTLIST_FOREACH_END(line);
+    smartlist_free(diff);
+  }
 
   tor_free(cons1);
   tor_free(cons2);
 
   smartlist_free(orig);
   smartlist_free(new);
-  smartlist_free(diff);
 
   return 0;
 }
