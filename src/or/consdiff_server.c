@@ -198,6 +198,18 @@ hashcmp(const char *hash1, const char *hash2)
   return strncmp(hash1, hash2, MAX(len1, len2));
 }
 
+INLINE void
+add_lines(smartlist_t *result, smartlist_t *cons,
+    int start, int end)
+{
+  int i;
+  for (i = start; i <= end; ++i) {
+    const char *line = smartlist_get(cons, i);
+    smartlist_add(result, tor_strdup(line));
+  }
+  smartlist_add_asprintf(result, ".");
+}
+
 smartlist_t *
 gen_diff(smartlist_t *cons1, smartlist_t *cons2)
 {
@@ -276,21 +288,13 @@ gen_diff(smartlist_t *cons1, smartlist_t *cons2)
     } else if (deleted == 0) {
       smartlist_add_asprintf(result, "%ia", start1);
 
-      int i;
-      for (i = start2; i <= end2; ++i)
-        smartlist_add(result, tor_strdup(smartlist_get(cons2, i)));
-
-      smartlist_add_asprintf(result, ".");
+      add_lines(result, cons2, start2, end2);
 
     } else {
       if (deleted == 1) smartlist_add_asprintf(result, "%ic", start1+1);
       else smartlist_add_asprintf(result, "%i,%ic", start1+1, start1+deleted);
 
-      int i;
-      for (i = start2; i <= end2; ++i)
-        smartlist_add(result, tor_strdup(smartlist_get(cons2, i)));
-
-      smartlist_add_asprintf(result, ".");
+      add_lines(result, cons2, start2, end2);
     }
   }
 
