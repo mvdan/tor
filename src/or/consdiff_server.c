@@ -170,8 +170,9 @@ INLINE int next_router(smartlist_t *cons, int cur)
   return cur;
 }
 
-INLINE const char* get_hash(const char *line)
+INLINE const char* get_hash(smartlist_t *cons, int line_num)
 {
+  const char *line = smartlist_get(cons, line_num);
   const char *c=line+strlen("r ")+1;
   while (*c != ' ') c++;
   return ++c;
@@ -191,8 +192,6 @@ smartlist_t* gen_diff(smartlist_t *cons1, smartlist_t *cons2)
   int i1=0, i2=0;
   int start1, start2;
 
-  const char *line1 = smartlist_get(cons1, i1);
-  const char *line2 = smartlist_get(cons2, i2);
   const char *hash1 = NULL;
   const char *hash2 = NULL;
 
@@ -202,18 +201,12 @@ smartlist_t* gen_diff(smartlist_t *cons1, smartlist_t *cons2)
 
     if (i1 < len1) {
       i1 = next_router(cons1, i1);
-      if (i1 != len1) {
-        line1 = smartlist_get(cons1, i1);
-        hash1 = get_hash(line1);
-      }
+      if (i1 != len1) hash1 = get_hash(cons1, i1);
     }
 
     if (i2 < len2) {
       i2 = next_router(cons2, i2);
-      if (i2 != len2) {
-        line2 = smartlist_get(cons2, i2);
-        hash2 = get_hash(line2);
-      }
+      if (i2 != len2) hash2 = get_hash(cons2, i2);
     }
 
     int cmp = hashcmp(hash1, hash2);
@@ -224,21 +217,17 @@ smartlist_t* gen_diff(smartlist_t *cons1, smartlist_t *cons2)
           i2 = len2;
           break;
         }
-        line1 = smartlist_get(cons1, i1);
-        hash1 = get_hash(line1);
-        cmp = hashcmp(hash1, hash2);
-      } else if (i2 < len2 && cmp > 0) {
+        hash1 = get_hash(cons1, i1);
+      }
+      if (i2 < len2 && cmp > 0) {
         i2 = next_router(cons2, i2);
         if (i2 == len2) {
           i1 = len1;
           break;
         }
-        line2 = smartlist_get(cons2, i2);
-        hash2 = get_hash(line2);
-        cmp = hashcmp(hash1, hash2);
-      } else {
-        break;
+        hash2 = get_hash(cons2, i2);
       }
+      cmp = hashcmp(hash1, hash2);
     }
 
     smartlist_slice_t *cons1_sl = smartlist_slice(cons1, start1, i1-start1);
