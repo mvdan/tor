@@ -32,12 +32,6 @@ smartlist_slice_string_pos(smartlist_slice_t *slice, const char *string)
 }
 
 INLINE int
-max(int a, int b)
-{
-  return (a > b) ? a : b;
-}
-
-INLINE int
 line_eq(const char *line1, smartlist_t *list2, int i2)
 {
   const char *line2 = smartlist_get(list2, i2);
@@ -63,7 +57,7 @@ lcs_lens(smartlist_slice_t *slice1, smartlist_slice_t *slice2, int direction)
       if (line_eq(line1, slice2->list, sj))
         result[j + 1] = prev[j] + 1;
       else
-        result[j + 1] = max(result[j], prev[j + 1]);
+        result[j + 1] = MAX(result[j], prev[j + 1]);
     }
   }
   tor_free(prev);
@@ -201,7 +195,7 @@ hashcmp(const char *hash1, const char *hash2)
 {
   int len1 = strchr(hash1, ' ')-hash1;
   int len2 = strchr(hash2, ' ')-hash2;
-  return strncmp(hash1, hash2, max(len1, len2));
+  return strncmp(hash1, hash2, MAX(len1, len2));
 }
 
 smartlist_t *
