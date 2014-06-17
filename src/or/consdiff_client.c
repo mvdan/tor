@@ -6,6 +6,10 @@
 
 #define RANGE_BASE 10
 
+/** Apply the diff to the consensus and return a new consensus, also as a
+ * line-based smartlist. Will return NULL if the ed diff is not properly
+ * formatted.
+ */
 smartlist_t *
 apply_diff(smartlist_t *cons1, smartlist_t *diff)
 {
@@ -15,7 +19,6 @@ apply_diff(smartlist_t *cons1, smartlist_t *diff)
 
   for (i=0; i<diff_len; ++i) {
     const char *diff_line = smartlist_get(diff, i);
-    /*fprintf(stderr, "%s\n", (char*)smartlist_get(diff, i));*/
     char *endptr1, *endptr2;
     int start, end;
     start = (int)strtol(diff_line, &endptr1, RANGE_BASE);
@@ -39,8 +42,10 @@ apply_diff(smartlist_t *cons1, smartlist_t *diff)
 
     /* Action is longer than one char. */
     if (*(endptr2+1) != '\0') goto error_cleanup;
+
     char action = *endptr2;
 
+    /* Add unchanged lines. */
     for (; j > end; --j) {
       char *cons_line = smartlist_get(cons1, j-1);
       smartlist_add(cons2, tor_strdup(cons_line));
@@ -51,25 +56,33 @@ apply_diff(smartlist_t *cons1, smartlist_t *diff)
       while (--j >= start) ;
     }
 
-    /* Add new lines. */
-    /* In reverse order, since it will all be reversed at the end. */
+    /** Add new lines.
+     * In reverse order, since it will all be reversed at the end. */
     if (action == 'a' || action == 'c') {
       int added_end = i++;
-      const char *added_line = smartlist_get(diff, i);
-      while (strcmp(added_line, "."))
-        added_line = smartlist_get(diff, ++i);
+
+      /* It would make no sense to add zero new lines. */
+      if (!strcmp(smartlist_get(diff, ++i), ".")) goto error_cleanup;
+
+      /* Fetch the reverse start of the added lines. */
+      while (strcmp(smartlist_get(diff, ++i), ".")) ;
       int added_i = i-1;
+
       while (added_i > added_end) {
-        added_line = smartlist_get(diff, added_i--);
+        const char *added_line = smartlist_get(diff, added_i--);
         smartlist_add(cons2, tor_strdup(added_line));
       }
     }
 
   }
+
+  /* Add remaining unchanged lines. */
   for (; j > 0; --j) {
     char *cons_line = smartlist_get(cons1, j-1);
     smartlist_add(cons2, tor_strdup(cons_line));
   }
+
+  /* Reverse the whole thing since we did it from the end. */
   smartlist_reverse(cons2);
   return cons2;
 
