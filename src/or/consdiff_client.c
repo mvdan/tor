@@ -2,89 +2,120 @@
 #include <stdio.h>
 #include <string.h>
 
-#define LINE_LENGTH 256
-#define BASE 10
+#include "container.h"
 
-/*
- *
- * Assumptions:
- *
- * - We'll never have a line larger than 255 chars
- * - <n1>[,<n2>] will not fill the entire line
- * - <n1> and <n2> will be valid numbers
- * - <n2> >= <n1>
- * - The diff will not have any other mistakes/errors/glitches
- * - ...
- *
- */
+#define RANGE_BASE 10
 
-int main(int argc, char* argv[]) {
+smartlist_t *
+apply_diff(smartlist_t *cons1, smartlist_t *diff)
+{
+  int i, diff_len = smartlist_len(diff);
+  int j = smartlist_len(cons1);
+  smartlist_t *cons2 = smartlist_new();
 
-	if (argc <= 2) return 1;
+  for (i=0; i<diff_len; ++i) {
+    const char *diff_line = smartlist_get(diff, i);
+    /*fprintf(stderr, "%s\n", (char*)smartlist_get(diff, i));*/
+    char *endptr1, *endptr2;
+    int start, end;
+    start = (int)strtol(diff_line, &endptr1, RANGE_BASE);
 
-	FILE *fd1 = fopen(argv[1], "r");
-	FILE *fd2 = fopen(argv[2], "w+");
-	char diff_line[LINE_LENGTH];
-	long orig_cur = 0;
-	char orig_line[LINE_LENGTH];
+    /* Missing range start. */
+    if (endptr1 == diff_line) goto error_cleanup;
 
-	while (fgets(diff_line, sizeof(diff_line), stdin)) {
+    /* Two-item range */
+    if (*endptr1 == ',') {
+        end = (int)strtol(endptr1+1, &endptr2, RANGE_BASE);
+        /* Missing range end. */
+        if (endptr2 == endptr1+1) goto error_cleanup;
+        /* Incoherent range. */
+        if (end <= start) goto error_cleanup;
 
-		char *endptr1, *endptr2;
-		long l1 = strtol(diff_line, &endptr1, BASE);
-		long l2;
+    /* We'll take <n1> as <n1>,<n1> for simplicity. */
+    } else {
+        endptr2 = endptr1;
+        end = start;
+    }
 
-		if (endptr1 == diff_line) {
-			printf("Missing range: %s", diff_line);
-			continue;
+    /* Action is longer than one char. */
+    if (*(endptr2+1) != '\0') goto error_cleanup;
+    char action = *endptr2;
 
-		} else if (*endptr1 == ',') {
-			l2 = strtol(endptr1+1, &endptr2, BASE);
-			if (endptr2 == endptr1+1) {
-				printf("Missing range: %s", diff_line);
-				continue;
-			}
+    for (; j > end; --j) {
+      char *cons_line = smartlist_get(cons1, j-1);
+      smartlist_add(cons2, tor_strdup(cons_line));
+    }
 
-		} else {
-			// We'll take <n1> as <n1>,<n1> for simplicity
-			endptr2 = endptr1;
-			l2 = l1;
-		}
+    /* Ignore removed lines. */
+    if (action == 'c' || action == 'd') {
+      while (--j >= start) ;
+    }
 
-		if (strcmp(endptr2, "d\n") == 0) {
+    /* Add new lines. */
+    /* In reverse order, since it will all be reversed at the end. */
+    if (action == 'a' || action == 'c') {
+      int added_end = i++;
+      const char *added_line = smartlist_get(diff, i);
+      while (strcmp(added_line, "."))
+        added_line = smartlist_get(diff, ++i);
+      int added_i = i-1;
+      while (added_i > added_end) {
+        added_line = smartlist_get(diff, added_i--);
+        smartlist_add(cons2, tor_strdup(added_line));
+      }
+    }
 
-			// get lines up to line to delete
-			while (orig_cur < l1) {
-				fgets(orig_line, sizeof(orig_line), fd1);
-				fputs(orig_line, fd2);
-				orig_cur++;
-			}
+  }
+  for (; j > 0; --j) {
+    char *cons_line = smartlist_get(cons1, j-1);
+    smartlist_add(cons2, tor_strdup(cons_line));
+  }
+  smartlist_reverse(cons2);
+  return cons2;
 
-			// discards <n2> - <n1> lines
-			long i;
-			for (i = l1; i <= l2; ++i) {
-				fgets(orig_line, sizeof(orig_line), fd1);
-			}
+error_cleanup:
 
-		} else if (*endptr2 == ',') {
-			printf("Too many range arguments: %s", diff_line);
+  SMARTLIST_FOREACH_BEGIN(cons2, char*, line) {
+    tor_free(line);
+  } SMARTLIST_FOREACH_END(line);
 
-		} else if (*endptr2 == '\n') {
-			printf("Missing command: %s", diff_line);
+  smartlist_free(cons2);
 
-		} else {
-			printf("Unimplemented command: %s", diff_line);
-		}
-	}
-
-	// write the rest of the lines
-	while (fgets(orig_line, sizeof(orig_line), fd1)) {
-		fputs(orig_line, fd2);
-		orig_cur++;
-	}
-
-	fclose(fd1);
-	fclose(fd2);
-
-	return 0;
+  return NULL;
 }
+
+int
+main(int argc, char **argv)
+{
+  smartlist_t *cons1 = smartlist_new();
+  smartlist_t *diff = smartlist_new();
+  if (argc != 3) {
+    fprintf(stderr, "Usage: %s file diff\n", argv[0]);
+    return 1;
+  }
+  char *cons1_str = read_file_to_str(argv[1], 0, NULL);
+  char *diff_str = read_file_to_str(argv[2], 0, NULL);
+
+  tor_split_lines(cons1, cons1_str, strlen(cons1_str));
+  tor_split_lines(diff, diff_str, strlen(diff_str));
+  smartlist_t *cons2 = apply_diff(cons1, diff);
+  if (cons2 == NULL) {
+    fprintf(stderr, "Something went wrong.\n");
+  } else {
+    SMARTLIST_FOREACH_BEGIN(cons2, char*, line) {
+      printf("%s\n", line);
+      tor_free(line);
+    } SMARTLIST_FOREACH_END(line);
+    smartlist_free(cons2);
+  }
+
+  tor_free(cons1_str);
+  tor_free(diff_str);
+
+  smartlist_free(cons1);
+  smartlist_free(diff);
+
+  return 0;
+}
+
+// vim: et sw=2
