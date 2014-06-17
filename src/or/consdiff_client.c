@@ -59,7 +59,7 @@ apply_diff(smartlist_t *cons1, smartlist_t *diff)
     /** Add new lines.
      * In reverse order, since it will all be reversed at the end. */
     if (action == 'a' || action == 'c') {
-      int added_end = i++;
+      int added_end = i;
 
       /* It would make no sense to add zero new lines. */
       if (!strcmp(smartlist_get(diff, ++i), ".")) goto error_cleanup;
