@@ -47,7 +47,7 @@ apply_diff(smartlist_t *cons1, smartlist_t *diff)
 
     /* Add unchanged lines. */
     for (; j > end; --j) {
-      char *cons_line = smartlist_get(cons1, j-1);
+      const char *cons_line = smartlist_get(cons1, j-1);
       smartlist_add(cons2, tor_strdup(cons_line));
     }
 
@@ -78,7 +78,7 @@ apply_diff(smartlist_t *cons1, smartlist_t *diff)
 
   /* Add remaining unchanged lines. */
   for (; j > 0; --j) {
-    char *cons_line = smartlist_get(cons1, j-1);
+    const char *cons_line = smartlist_get(cons1, j-1);
     smartlist_add(cons2, tor_strdup(cons_line));
   }
 
