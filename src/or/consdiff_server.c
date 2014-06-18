@@ -229,10 +229,15 @@ is_valid_router_entry(const char *line)
 INLINE int
 next_router(smartlist_t *cons, int cur)
 {
-  const char *line = smartlist_get(cons, ++cur);
   int len = smartlist_len(cons);
-  while (cur < len && !is_valid_router_entry(line))
-    line = smartlist_get(cons, ++cur);
+  cur++;
+  if (cur >= len) return len;
+  const char *line = smartlist_get(cons, cur);
+  while (!is_valid_router_entry(line)) {
+    cur++;
+    if (cur >= len) return len;
+    line = smartlist_get(cons, cur);
+  }
   return cur;
 }
 
