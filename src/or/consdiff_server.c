@@ -16,7 +16,7 @@ typedef struct {
 
 /** Create (allocate) a new slice from a smartlist.
  */
-INLINE smartlist_slice_t *
+static smartlist_slice_t *
 smartlist_slice(smartlist_t *list, int offset, int len)
 {
   smartlist_slice_t *slice = tor_malloc(sizeof(smartlist_slice_t));
@@ -28,7 +28,7 @@ smartlist_slice(smartlist_t *list, int offset, int len)
 
 /** Like smartlist_string_pos, but limited to the bounds of the slice.
  */
-INLINE int
+static int
 smartlist_slice_string_pos(smartlist_slice_t *slice, const char *string)
 {
   int i, end = slice->offset + slice->len;
@@ -44,7 +44,7 @@ smartlist_slice_string_pos(smartlist_slice_t *slice, const char *string)
  * slice2 (divide and conquer) while still having the optimal solution.
  * If direction is -1, the navigation is reversed. Otherwise it should be 1.
  */
-INLINE int *
+static int *
 lcs_lens(smartlist_slice_t *slice1, smartlist_slice_t *slice2, int direction)
 {
   int i, j, si, sj;
@@ -84,7 +84,7 @@ lcs_lens(smartlist_slice_t *slice1, smartlist_slice_t *slice2, int direction)
 /** Helper: Trim any number of lines that are equally at the start or the end
  * of both slices.
  */
-INLINE void
+static void
 trim_slices(smartlist_slice_t *slice1, smartlist_slice_t *slice2)
 {
   const char *line1 = smartlist_get(slice1->list, slice1->offset);
@@ -116,7 +116,7 @@ trim_slices(smartlist_slice_t *slice1, smartlist_slice_t *slice2)
  * present in the other slice will be set to changed in their bool array.
  * The two changed bool arrays are passed in the same order as the slices.
  */
-INLINE void
+static void
 set_changed(bitarray_t *changed1, bitarray_t *changed2,
     smartlist_slice_t *slice1, smartlist_slice_t *slice2)
 {
@@ -139,7 +139,7 @@ set_changed(bitarray_t *changed1, bitarray_t *changed2,
  * small enough, set_changed will be used to finally store that portion of the
  * result.
  */
-void
+static void
 calc_changes(smartlist_slice_t *slice1, smartlist_slice_t *slice2,
     bitarray_t *changed1, bitarray_t *changed2)
 {
@@ -201,7 +201,7 @@ calc_changes(smartlist_slice_t *slice1, smartlist_slice_t *slice2,
 /** Helper: Get the identity hash from a router line, assuming that the line
  * at least appears to be a router line and thus starts with "r ".
  */
-const char *
+static const char *
 get_id_hash(const char *r_line)
 {
   r_line += strlen("r ");
@@ -217,7 +217,7 @@ get_id_hash(const char *r_line)
 /** Helper: Check that a line is a valid router entry. We must at least be
  * able to fetch a proper identity hash from it for it to be valid.
  */
-INLINE int
+static int
 is_valid_router_entry(const char *line)
 {
   if (strncmp("r ", line, 2) != 0) return 0;
@@ -226,7 +226,7 @@ is_valid_router_entry(const char *line)
 
 /** Helper: Find the next router line starting at the current position.
  */
-INLINE int
+static int
 next_router(smartlist_t *cons, int cur)
 {
   int len = smartlist_len(cons);
@@ -243,7 +243,7 @@ next_router(smartlist_t *cons, int cur)
 
 /** Helper: compare two identity hashes which may be of different lengths.
  */
-INLINE int
+static int
 hashcmp(const char *hash1, const char *hash2)
 {
   if (hash1 == NULL || hash2 == NULL) return -1;
