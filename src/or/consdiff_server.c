@@ -283,7 +283,7 @@ gen_diff(smartlist_t *cons1, smartlist_t *cons2)
      * we have two matching positions or the end of both consensues.
      */
     int cmp = hashcmp(hash1, hash2);
-    while ((i1 < len1 || i2 < len2) && cmp != 0) {
+    while (i1 < len1 && i2 < len2 && cmp != 0) {
       if (i1 < len1 && cmp < 0) {
         i1 = next_router(cons1, i1);
         if (i1 == len1) {
