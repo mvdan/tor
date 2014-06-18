@@ -239,32 +239,85 @@ next_router(smartlist_t *cons, int cur)
   return cur;
 }
 
-/** Helper: compare two identity hashes which may be of different lengths.
+/* This table is from crypto.c. The SP and PAD defines are different. */
+#define X 255
+#define SP X
+#define PAD X
+static const uint8_t base64_compare_table[256] = {
+  X, X, X, X, X, X, X, X, X, SP, SP, SP, X, SP, X, X,
+  X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X,
+  SP, X, X, X, X, X, X, X, X, X, X, 62, X, X, X, 63,
+  52, 53, 54, 55, 56, 57, 58, 59, 60, 61, X, X, X, PAD, X, X,
+  X, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14,
+  15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, X, X, X, X, X,
+  X, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
+  41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, X, X, X, X, X,
+  X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X,
+  X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X,
+  X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X,
+  X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X,
+  X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X,
+  X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X,
+  X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X,
+  X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X,
+};
+
+/** Helper: compare two base64-encoded identity hashes which may be of
+ * different lengths. Comparison ends when the first non-base64 char is found.
  */
 static int
 hashcmp(const char *hash1, const char *hash2)
 {
-  if (hash1 == NULL || hash2 == NULL) return -1;
-  int len1 = strchr(hash1, ' ')-hash1;
-  int len2 = strchr(hash2, ' ')-hash2;
-  return strncmp(hash1, hash2, MAX(len1, len2));
+  /* NULL is always lower, useful for last_hash which starts at NULL. */
+  if (hash1 == NULL && hash2 == NULL) return 0;
+  if (hash1 == NULL) return -1;
+  if (hash2 == NULL) return 1;
+
+  /* Don't index with a char; char may be signed. */
+  const unsigned char *a = (unsigned char*)hash1;
+  const unsigned char *b = (unsigned char*)hash2;
+  while (1) {
+    uint8_t av = base64_compare_table[*a];
+    uint8_t bv = base64_compare_table[*b];
+    if (av == X) {
+      if (bv == X)
+        return 0; /* Both ended with exactly the same characters. */
+      else
+        return -1; /* hash2 goes on longer than hash1 and thus hash1 is lower. */
+    } else if (bv == X) {
+      return 1; /* hash1 goes on longer than hash2 and thus hash1 is greater. */
+    } else if (av < bv) {
+      return -1; /* The first difference shows that hash1 is lower. */
+    } else if (av > bv) {
+      return 1; /* The first difference shows that hash1 is greater. */
+    } else {
+      ++a;
+      ++b;
+    }
+  }
 }
 
 /** Generate an ed diff as a smartlist from two consensuses, also given as
  * smartlists. Will return NULL if the diff could not be generated, which can
- * only happen if any lines the script had to add matched ".".
+ * happen if any lines the script had to add matched "." or if the routers
+ * were not properly ordered.
  */
 smartlist_t *
 gen_diff(smartlist_t *cons1, smartlist_t *cons2)
 {
   int len1 = smartlist_len(cons1);
   int len2 = smartlist_len(cons2);
+  smartlist_t *result = smartlist_new();
   bitarray_t *changed1 = bitarray_init_zero(len1);
   bitarray_t *changed2 = bitarray_init_zero(len2);
   int i1=0, i2=0;
 
   const char *hash1 = NULL;
   const char *hash2 = NULL;
+
+  /* To check that hashes are ordered properly */
+  const char *last_hash1 = NULL;
+  const char *last_hash2 = NULL;
 
   /* While we havent't reached the end of both consensuses...
    * We always reach both ends at some point. The first thing that the loop
@@ -279,12 +332,22 @@ gen_diff(smartlist_t *cons1, smartlist_t *cons2)
      */
     if (i1 < len1) {
       i1 = next_router(cons1, i1);
-      if (i1 != len1) hash1 = get_id_hash(smartlist_get(cons1, i1));
+      if (i1 != len1) {
+        last_hash1 = hash1;
+        hash1 = get_id_hash(smartlist_get(cons1, i1));
+        /* Identity hashes must always be higher */
+        if (hashcmp(hash1, last_hash1) <= 0) goto error_cleanup;
+      }
     }
 
     if (i2 < len2) {
       i2 = next_router(cons2, i2);
-      if (i2 != len2) hash2 = get_id_hash(smartlist_get(cons2, i2));
+      if (i2 != len2) {
+        last_hash2 = hash2;
+        hash2 = get_id_hash(smartlist_get(cons2, i2));
+        /* Identity hashes must always be higher */
+        if (hashcmp(hash2, last_hash2) <= 0) goto error_cleanup;
+      }
     }
 
     /* Keep on advancing the lower (by identity hash sorting) position until
@@ -327,7 +390,6 @@ gen_diff(smartlist_t *cons1, smartlist_t *cons2)
    * each chunk of changes.
    */
   i1=len1-1, i2=len2-1;
-  smartlist_t *result = smartlist_new();
   while (i1 > 0 || i2 > 0) {
 
     /* We are at a point were no changed bools are true, so just keep going. */
