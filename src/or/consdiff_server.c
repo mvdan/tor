@@ -39,16 +39,6 @@ smartlist_slice_string_pos(smartlist_slice_t *slice, const char *string)
   return -1;
 }
 
-/** Helper: See if a line is equal to another line that is in a smartlist.
- */
-INLINE int
-line_eq(const char *line1, smartlist_t *list2, int i2)
-{
-  const char *line2 = smartlist_get(list2, i2);
-  if (line1 == line2) return 0;
-  return !strcmp(line1, line2);
-}
-
 /** Helper: Compute the longest common substring lengths for the two slices.
  * Used as part of the diff generation to find the column at which to split
  * slice2 (divide and conquer) while still having the optimal solution.
@@ -77,8 +67,9 @@ lcs_lens(smartlist_slice_t *slice1, smartlist_slice_t *slice2, int direction)
     if (direction == -1) sj += (slice2->len-1);
     for (j = 0; j < slice2->len; ++j, sj+=direction) {
 
+      const char *line2 = smartlist_get(slice2->list, sj);
       /* If the lines are equal, the lcs is one line longer. */
-      if (line_eq(line1, slice2->list, sj))
+      if (!strcmp(line1, line2))
         result[j + 1] = prev[j] + 1;
       /* If not, see what lcs parent path is longer. */
       else
