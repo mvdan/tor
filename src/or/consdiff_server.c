@@ -230,12 +230,10 @@ static int
 next_router(smartlist_t *cons, int cur)
 {
   int len = smartlist_len(cons);
-  cur++;
-  if (cur >= len) return len;
+  if (++cur >= len) return len;
   const char *line = smartlist_get(cons, cur);
   while (!is_valid_router_entry(line)) {
-    cur++;
-    if (cur >= len) return len;
+    if (++cur >= len) return len;
     line = smartlist_get(cons, cur);
   }
   return cur;
