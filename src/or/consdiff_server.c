@@ -117,18 +117,18 @@ trim_slices(smartlist_slice_t *slice1, smartlist_slice_t *slice2)
  * The two changed bool arrays are passed in the same order as the slices.
  */
 INLINE void
-set_changed(char *changed1, char *changed2,
+set_changed(bitarray_t *changed1, bitarray_t *changed2,
     smartlist_slice_t *slice1, smartlist_slice_t *slice2)
 {
   int toskip = -1;
   if (slice1->len == 1) {
     const char *line_common = smartlist_get(slice1->list, slice1->offset);
     toskip = smartlist_slice_string_pos(slice2, line_common);
-    if (toskip == -1) changed1[slice1->offset] = 1;
+    if (toskip == -1) bitarray_set(changed1, slice1->offset);
   }
   int i, end = slice2->offset + slice2->len;
   for (i = slice2->offset; i < end; ++i)
-    if (i != toskip) changed2[i] = 1;
+    if (i != toskip) bitarray_set(changed2, i);
 }
 
 /**
@@ -141,7 +141,7 @@ set_changed(char *changed1, char *changed2,
  */
 void
 calc_changes(smartlist_slice_t *slice1, smartlist_slice_t *slice2,
-    char *changed1, char *changed2)
+    bitarray_t *changed1, bitarray_t *changed2)
 {
   trim_slices(slice1, slice2);
 
@@ -256,13 +256,18 @@ gen_diff(smartlist_t *cons1, smartlist_t *cons2)
 {
   int len1 = smartlist_len(cons1);
   int len2 = smartlist_len(cons2);
-  char *changed1 = tor_malloc_zero(sizeof(char) * len1);
-  char *changed2 = tor_malloc_zero(sizeof(char) * len2);
+  bitarray_t *changed1 = bitarray_init_zero(len1);
+  bitarray_t *changed2 = bitarray_init_zero(len2);
   int i1=0, i2=0;
 
   const char *hash1 = NULL;
   const char *hash2 = NULL;
 
+  /* While we havent't reached the end of both consensuses...
+   * We always reach both ends at some point. The first thing that the loop
+   * does is advance each of the line positions if they haven't reached the
+   * end. Later on, TODO
+   */
   while (i1 < len1 || i2 < len2) {
     int start1 = i1, start2 = i2;
 
@@ -323,7 +328,8 @@ gen_diff(smartlist_t *cons1, smartlist_t *cons2)
   while (i1 > 0 || i2 > 0) {
 
     /* We are at a point were no changed bools are true, so just keep going. */
-    if (!(i1 >= 0 && changed1[i1]) && !(i2 >= 0 && changed2[i2])) {
+    if (!(i1 >= 0 && bitarray_is_set(changed1, i1)) &&
+        !(i2 >= 0 && bitarray_is_set(changed2, i2))) {
       if (i1 >= 0) i1--;
       if (i2 >= 0) i2--;
       continue;
@@ -332,8 +338,8 @@ gen_diff(smartlist_t *cons1, smartlist_t *cons2)
     int end1 = i1, end2 = i2;
 
     /* Grab all contiguous changed lines */
-    while (i1 >= 0 && changed1[i1]) i1--;
-    while (i2 >= 0 && changed2[i2]) i2--;
+    while (i1 >= 0 && bitarray_is_set(changed1, i1)) i1--;
+    while (i2 >= 0 && bitarray_is_set(changed2, i2)) i2--;
 
     int start1 = i1+1, start2 = i2+1;
     int added = end2-i2, deleted = end1-i1;
@@ -361,15 +367,15 @@ gen_diff(smartlist_t *cons1, smartlist_t *cons2)
     }
   }
 
-  tor_free(changed1);
-  tor_free(changed2);
+  bitarray_free(changed1);
+  bitarray_free(changed2);
 
   return result;
 
 error_cleanup:
 
-  tor_free(changed1);
-  tor_free(changed2);
+  bitarray_free(changed1);
+  bitarray_free(changed2);
 
   SMARTLIST_FOREACH_BEGIN(result, char*, line) {
     tor_free(line);
