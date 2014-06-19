@@ -328,23 +328,25 @@ gen_diff(smartlist_t *cons1, smartlist_t *cons2)
   const char *last_hash1 = NULL;
   const char *last_hash2 = NULL;
 
-  /* While we havent't reached the end of both consensuses...
-   * We always reach both ends at some point. The first thing that the loop
-   * does is advance each of the line positions if they haven't reached the
-   * end. Later on, TODO
+  /* i1 and i2 are initialized at the first line of each consensus. They never
+   * reach past len1 and len2 respectively, since next_router doesn't let that
+   * happen. i1 and i2 are advanced by at least one line at each iteration as
+   * long as they have not yet reached len1 and len2, so the loop is
+   * guaranteed to end, and each pair of (i1,i2) will be inspected at most
+   * once.
    */
   while (i1 < len1 || i2 < len2) {
     int start1 = i1, start2 = i2;
 
-    /* Advance each of the two navigation positions by one router entry if
-     * possible.
+    /* Advance each of the two navigation positions by one router entry if not
+     * yet at the end.
      */
     if (i1 < len1) {
       i1 = next_router(cons1, i1);
       if (i1 != len1) {
         last_hash1 = hash1;
         hash1 = get_id_hash(smartlist_get(cons1, i1));
-        /* Identity hashes must always be higher */
+        /* Identity hashes must always increase. */
         if (hashcmp(hash1, last_hash1) <= 0) goto error_cleanup;
       }
     }
@@ -354,33 +356,53 @@ gen_diff(smartlist_t *cons1, smartlist_t *cons2)
       if (i2 != len2) {
         last_hash2 = hash2;
         hash2 = get_id_hash(smartlist_get(cons2, i2));
-        /* Identity hashes must always be higher */
+        /* Identity hashes must always increase. */
         if (hashcmp(hash2, last_hash2) <= 0) goto error_cleanup;
       }
     }
 
-    /* Keep on advancing the lower (by identity hash sorting) position until
-     * we have two matching positions or the end of both consensues.
-     */
-    int cmp = hashcmp(hash1, hash2);
-    while (i1 < len1 && i2 < len2 && cmp != 0) {
-      if (i1 < len1 && cmp < 0) {
-        i1 = next_router(cons1, i1);
-        if (i1 == len1) {
-          i2 = len2;
-          break;
+    /* If we have reached the end of both consensuses, there is no need to
+     * compare hashes anymore, since this is the last iteration. */
+    if (i1 < len1 || i2 < len2) {
+
+      /* Keep on advancing the lower (by identity hash sorting) position until
+       * we have two matching positions. The only other possible outcome is
+       * that a lower position reaches the end of the consensus before it can
+       * reach a hash that is no longer the lower one. Since there will always
+       * be a lower hash for as long as the loop runs, one of the two indexes
+       * will always be incremented, thus assuring that the loop must end
+       * after a finite number of iterations.
+       */
+      int cmp = hashcmp(hash1, hash2);
+      while (cmp != 0) {
+        if (i1 < len1 && cmp < 0) {
+          i1 = next_router(cons1, i1);
+          if (i1 == len1) {
+            /* We finished the first consensus, so grab all the remaining
+             * lines of the second consensus and finish up. */
+            i2 = len2;
+            break;
+          }
+          last_hash1 = hash1;
+          hash1 = get_id_hash(smartlist_get(cons1, i1));
+          /* Identity hashes must always increase. */
+          if (hashcmp(hash1, last_hash1) <= 0) goto error_cleanup;
         }
-        hash1 = get_id_hash(smartlist_get(cons1, i1));
-      }
-      if (i2 < len2 && cmp > 0) {
-        i2 = next_router(cons2, i2);
-        if (i2 == len2) {
-          i1 = len1;
-          break;
+        if (i2 < len2 && cmp > 0) {
+          i2 = next_router(cons2, i2);
+          if (i2 == len2) {
+            /* We finished the second consensus, so grab all the remaining
+             * lines of the first consensus and finish up. */
+            i1 = len1;
+            break;
+          }
+          last_hash2 = hash2;
+          hash2 = get_id_hash(smartlist_get(cons2, i2));
+          /* Identity hashes must always increase. */
+          if (hashcmp(hash2, last_hash2) <= 0) goto error_cleanup;
         }
-        hash2 = get_id_hash(smartlist_get(cons2, i2));
+        cmp = hashcmp(hash1, hash2);
       }
-      cmp = hashcmp(hash1, hash2);
     }
 
     /* Make slices out of these chunks (up to the common router entry) and
@@ -391,9 +413,7 @@ gen_diff(smartlist_t *cons1, smartlist_t *cons2)
     calc_changes(cons1_sl, cons2_sl, changed1, changed2);
     tor_free(cons1_sl);
     tor_free(cons2_sl);
-
   }
-
 
   /* Navigate the changes in reverse order and generate one ed command for
    * each chunk of changes.
