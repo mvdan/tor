@@ -46,11 +46,12 @@ smartlist_slice_string_pos(smartlist_slice_t *slice, const char *string)
 /** Helper: Compute the longest common substring lengths for the two slices.
  * Used as part of the diff generation to find the column at which to split
  * slice2 (divide and conquer) while still having the optimal solution.
- * If direction is -1, the navigation is reversed. Otherwise it should be 1.
+ * If direction is -1, the navigation is reversed. Otherwise it must be 1.
  */
 static int *
 lcs_lens(smartlist_slice_t *slice1, smartlist_slice_t *slice2, int direction)
 {
+  tor_assert(direction == 1 || direction == -1);
   int i, j, si, sj;
   size_t a_size = sizeof(int) * (slice2->len+1);
 
@@ -141,7 +142,8 @@ set_changed(bitarray_t *changed1, bitarray_t *changed2,
  * function will keep on splitting slice1 by half and splitting up slice2 by
  * the column that lcs_lens deems appropriate. Once any of the two slices gets
  * small enough, set_changed will be used to finally store that portion of the
- * result.
+ * result. It is assumed that the lengths of the changed bitarrays match those
+ * of their full consensus smartlists.
  */
 static void
 calc_changes(smartlist_slice_t *slice1, smartlist_slice_t *slice2,
@@ -229,11 +231,14 @@ is_valid_router_entry(const char *line)
 }
 
 /** Helper: Find the next router line starting at the current position.
+ * Assumes that cur is lower than the length of the smartlist, i.e. it is a
+ * line within the bounds of the consensus.
  */
 static int
 next_router(smartlist_t *cons, int cur)
 {
   int len = smartlist_len(cons);
+  tor_assert(cur >= 0 && cur < len);
   if (++cur >= len) return len;
   const char *line = smartlist_get(cons, cur);
   while (!is_valid_router_entry(line)) {
