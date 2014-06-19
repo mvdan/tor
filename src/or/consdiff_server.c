@@ -14,11 +14,15 @@ typedef struct {
   int len;
 } smartlist_slice_t;
 
-/** Create (allocate) a new slice from a smartlist.
+/** Create (allocate) a new slice from a smartlist. Assumes that the offset
+ * and the consequent length are in the bounds of the smartlist.
  */
 static smartlist_slice_t *
 smartlist_slice(smartlist_t *list, int offset, int len)
 {
+  int list_len = smartlist_len(list);
+  tor_assert(offset >= 0 && offset < list_len);
+  tor_assert(len >= 0 && offset+len <= list_len);
   smartlist_slice_t *slice = tor_malloc(sizeof(smartlist_slice_t));
   slice->list = list;
   slice->offset = offset;
