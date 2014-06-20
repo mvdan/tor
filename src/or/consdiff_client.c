@@ -8,7 +8,8 @@
 
 /** Apply the diff to the consensus and return a new consensus, also as a
  * line-based smartlist. Will return NULL if the ed diff is not properly
- * formatted.
+ * formatted. Neither the consensus nor the diff are modified in any way, so
+ * it's up to the caller to free their resources.
  */
 smartlist_t *
 apply_diff(smartlist_t *cons1, smartlist_t *diff)
