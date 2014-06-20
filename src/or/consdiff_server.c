@@ -309,7 +309,8 @@ hashcmp(const char *hash1, const char *hash2)
 /** Generate an ed diff as a smartlist from two consensuses, also given as
  * smartlists. Will return NULL if the diff could not be generated, which can
  * happen if any lines the script had to add matched "." or if the routers
- * were not properly ordered.
+ * were not properly ordered. Neither of the two consensuses are modified in
+ * any way, so it's up to the caller to free their resources.
  */
 smartlist_t *
 gen_diff(smartlist_t *cons1, smartlist_t *cons2)
