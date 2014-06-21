@@ -481,38 +481,98 @@ error_cleanup:
   return NULL;
 }
 
-int
-main(int argc, char **argv)
+/** Apply the diff to the consensus and return a new consensus, also as a
+ * line-based smartlist. Will return NULL if the ed diff is not properly
+ * formatted. Neither the consensus nor the diff are modified in any way, so
+ * it's up to the caller to free their resources.
+ */
+
+smartlist_t *
+apply_diff(smartlist_t *cons1, smartlist_t *diff)
 {
-  smartlist_t *orig = smartlist_new();
-  smartlist_t *new = smartlist_new();
-  if (argc != 3) {
-    fprintf(stderr, "Usage: %s file1 file2\n", argv[0]);
-    return 1;
+  int i, diff_len = smartlist_len(diff);
+  int j = smartlist_len(cons1);
+  smartlist_t *cons2 = smartlist_new();
+
+  for (i=0; i<diff_len; ++i) {
+    const char *diff_line = smartlist_get(diff, i);
+    char *endptr1, *endptr2;
+    int start, end;
+#define RANGE_BASE 10
+    start = (int)strtol(diff_line, &endptr1, RANGE_BASE);
+
+    /* Missing range start. */
+    if (endptr1 == diff_line) goto error_cleanup;
+
+    /* Two-item range */
+    if (*endptr1 == ',') {
+        end = (int)strtol(endptr1+1, &endptr2, RANGE_BASE);
+        /* Missing range end. */
+        if (endptr2 == endptr1+1) goto error_cleanup;
+        /* Incoherent range. */
+        if (end <= start) goto error_cleanup;
+
+    /* We'll take <n1> as <n1>,<n1> for simplicity. */
+    } else {
+        endptr2 = endptr1;
+        end = start;
+    }
+
+    /* Action is longer than one char. */
+    if (*(endptr2+1) != '\0') goto error_cleanup;
+
+    char action = *endptr2;
+
+    /* Add unchanged lines. */
+    for (; j > end; --j) {
+      const char *cons_line = smartlist_get(cons1, j-1);
+      smartlist_add(cons2, tor_strdup(cons_line));
+    }
+
+    /* Ignore removed lines. */
+    if (action == 'c' || action == 'd') {
+      while (--j >= start) ;
+    }
+
+    /** Add new lines.
+     * In reverse order, since it will all be reversed at the end. */
+    if (action == 'a' || action == 'c') {
+      int added_end = i;
+
+      /* It would make no sense to add zero new lines. */
+      if (!strcmp(smartlist_get(diff, ++i), ".")) goto error_cleanup;
+
+      /* Fetch the reverse start of the added lines. */
+      while (strcmp(smartlist_get(diff, ++i), ".")) ;
+      int added_i = i-1;
+
+      while (added_i > added_end) {
+        const char *added_line = smartlist_get(diff, added_i--);
+        smartlist_add(cons2, tor_strdup(added_line));
+      }
+    }
+
   }
-  char *cons1 = read_file_to_str(argv[1], 0, NULL);
-  char *cons2 = read_file_to_str(argv[2], 0, NULL);
 
-  tor_split_lines(orig, cons1, strlen(cons1));
-  tor_split_lines(new, cons2, strlen(cons2));
-  smartlist_t *diff = gen_diff(orig, new);
-  if (diff == NULL) {
-    fprintf(stderr, "Something went wrong.\n");
-  } else {
-    SMARTLIST_FOREACH_BEGIN(diff, char*, line) {
-      printf("%s\n", line);
-      tor_free(line);
-    } SMARTLIST_FOREACH_END(line);
-    smartlist_free(diff);
+  /* Add remaining unchanged lines. */
+  for (; j > 0; --j) {
+    const char *cons_line = smartlist_get(cons1, j-1);
+    smartlist_add(cons2, tor_strdup(cons_line));
   }
 
-  tor_free(cons1);
-  tor_free(cons2);
+  /* Reverse the whole thing since we did it from the end. */
+  smartlist_reverse(cons2);
+  return cons2;
 
-  smartlist_free(orig);
-  smartlist_free(new);
+error_cleanup:
 
-  return 0;
+  SMARTLIST_FOREACH_BEGIN(cons2, char*, line) {
+    tor_free(line);
+  } SMARTLIST_FOREACH_END(line);
+
+  smartlist_free(cons2);
+
+  return NULL;
 }
 
 // vim: et sw=2
