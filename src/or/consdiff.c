@@ -4,13 +4,13 @@
 
 #include "container.h"
 
-/** Data structure to define a slice of a smarltist */
+/** Data structure to define a slice of a smarltist. */
 typedef struct {
-  /** Smartlist that this slice is made from */
+  /** Smartlist that this slice is made from. */
   smartlist_t *list;
-  /** Starting position of the smartlist */
+  /** Starting position of the smartlist. */
   int offset;
-  /** Number of elements in the slice */
+  /** Number of elements in the slice. */
   int len;
 } smartlist_slice_t;
 
@@ -498,15 +498,15 @@ apply_diff(smartlist_t *cons1, smartlist_t *diff)
     const char *diff_line = smartlist_get(diff, i);
     char *endptr1, *endptr2;
     int start, end;
-#define RANGE_BASE 10
-    start = (int)strtol(diff_line, &endptr1, RANGE_BASE);
+#define LINE_BASE 10
+    start = (int)strtol(diff_line, &endptr1, LINE_BASE);
 
     /* Missing range start. */
     if (endptr1 == diff_line) goto error_cleanup;
 
     /* Two-item range */
     if (*endptr1 == ',') {
-        end = (int)strtol(endptr1+1, &endptr2, RANGE_BASE);
+        end = (int)strtol(endptr1+1, &endptr2, LINE_BASE);
         /* Missing range end. */
         if (endptr2 == endptr1+1) goto error_cleanup;
         /* Incoherent range. */
