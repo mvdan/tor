@@ -3,16 +3,7 @@
 #include <string.h>
 
 #include "container.h"
-
-/** Data structure to define a slice of a smarltist. */
-typedef struct {
-  /** Smartlist that this slice is made from. */
-  smartlist_t *list;
-  /** Starting position of the smartlist. */
-  int offset;
-  /** Number of elements in the slice. */
-  int len;
-} smartlist_slice_t;
+#include "consdiff.h"
 
 /** Create (allocate) a new slice from a smartlist. Assumes that the offset
  * and the consequent length are in the bounds of the smartlist.
@@ -472,10 +463,7 @@ error_cleanup:
   bitarray_free(changed1);
   bitarray_free(changed2);
 
-  SMARTLIST_FOREACH_BEGIN(result, char*, line) {
-    tor_free(line);
-  } SMARTLIST_FOREACH_END(line);
-
+  SMARTLIST_FOREACH(result, char*, line, tor_free(line));
   smartlist_free(result);
 
   return NULL;
@@ -566,10 +554,7 @@ apply_diff(smartlist_t *cons1, smartlist_t *diff)
 
 error_cleanup:
 
-  SMARTLIST_FOREACH_BEGIN(cons2, char*, line) {
-    tor_free(line);
-  } SMARTLIST_FOREACH_END(line);
-
+  SMARTLIST_FOREACH(cons2, char*, line, tor_free(line));
   smartlist_free(cons2);
 
   return NULL;
