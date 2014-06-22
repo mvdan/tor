@@ -334,6 +334,7 @@ test_consdiff_next_router(void)
   test_eq(4, next_router(sl, 1));
 
   /* There are no more router entries, so return the line after the last. */
+  test_eq(6, next_router(sl, 4));
   test_eq(6, next_router(sl, 5));
 
  done:

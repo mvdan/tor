@@ -257,13 +257,14 @@ is_valid_router_entry(const char *line)
 
 /** Helper: Find the next router line starting at the current position.
  * Assumes that cur is lower than the length of the smartlist, i.e. it is a
- * line within the bounds of the consensus.
+ * line within the bounds of the consensus. The only exception is when we
+ * don't want to skip the first line, in which case cur will be -1.
  */
 static int
 next_router(smartlist_t *cons, int cur)
 {
   int len = smartlist_len(cons);
-  tor_assert(cur >= 0 && cur < len);
+  tor_assert(cur >= -1 && cur < len);
   if (++cur >= len) return len;
   const char *line = smartlist_get(cons, cur);
   while (!is_valid_router_entry(line)) {
@@ -322,7 +323,8 @@ gen_diff(smartlist_t *cons1, smartlist_t *cons2)
   smartlist_t *result = smartlist_new();
   bitarray_t *changed1 = bitarray_init_zero(len1);
   bitarray_t *changed2 = bitarray_init_zero(len2);
-  int i1=0, i2=0;
+  int i1=-1, i2=-1;
+  int start1=0, start2=0;
 
   const char *hash1 = NULL;
   const char *hash2 = NULL;
@@ -339,8 +341,6 @@ gen_diff(smartlist_t *cons1, smartlist_t *cons2)
    * once.
    */
   while (i1 < len1 || i2 < len2) {
-    int start1 = i1, start2 = i2;
-
     /* Advance each of the two navigation positions by one router entry if not
      * yet at the end.
      */
@@ -416,6 +416,7 @@ gen_diff(smartlist_t *cons1, smartlist_t *cons2)
     calc_changes(cons1_sl, cons2_sl, changed1, changed2);
     tor_free(cons1_sl);
     tor_free(cons2_sl);
+    start1 = i1, start2 = i2;
   }
 
   /* Navigate the changes in reverse order and generate one ed command for
