@@ -13,8 +13,10 @@ test_consdiff_smartlist_slice(void)
   smartlist_add(sl, (void*)4);
   smartlist_add(sl, (void*)5);
 
+  smartlist_slice_t *sls;
+
   /* See if the slice was done correctly. */
-  smartlist_slice_t *sls = smartlist_slice(sl, 2, 3);
+  sls = smartlist_slice(sl, 2, 3);
   test_eq_ptr(sl, sls->list);
   test_eq_ptr((void*)3, smartlist_get(sls->list, sls->offset));
   test_eq_ptr((void*)5, smartlist_get(sls->list, sls->offset + (sls->len-1)));
@@ -183,6 +185,87 @@ test_consdiff_set_changed(void)
   test_assert(bitarray_is_set(changed2, 1));
   test_assert(bitarray_is_set(changed2, 2));
   test_assert(!bitarray_is_set(changed2, 3));
+
+ done:
+  bitarray_free(changed1);
+  bitarray_free(changed2);
+  SMARTLIST_FOREACH(sl1, char*, line, tor_free(line));
+  SMARTLIST_FOREACH(sl2, char*, line, tor_free(line));
+  smartlist_free(sl1);
+  smartlist_free(sl2);
+  tor_free(sls1);
+  tor_free(sls2);
+}
+
+static void
+test_consdiff_calc_changes(void)
+{
+  smartlist_t *sl1 = smartlist_new();
+  smartlist_t *sl2 = smartlist_new();
+  smartlist_split_string(sl1, "a:a:a:a", ":", 0, 0);
+  smartlist_split_string(sl2, "a:a:a:a", ":", 0, 0);
+  bitarray_t *changed1 = bitarray_init_zero(4);
+  bitarray_t *changed2 = bitarray_init_zero(4);
+  smartlist_slice_t *sls1, *sls2;
+
+  sls1 = smartlist_slice(sl1, 0, 4);
+  sls2 = smartlist_slice(sl2, 0, 4);
+  calc_changes(sls1, sls2, changed1, changed2);
+
+  /* Nothing should be set to changed. */
+  test_assert(!bitarray_is_set(changed1, 0));
+  test_assert(!bitarray_is_set(changed1, 1));
+  test_assert(!bitarray_is_set(changed1, 2));
+  test_assert(!bitarray_is_set(changed1, 3));
+
+  test_assert(!bitarray_is_set(changed2, 0));
+  test_assert(!bitarray_is_set(changed2, 1));
+  test_assert(!bitarray_is_set(changed2, 2));
+  test_assert(!bitarray_is_set(changed2, 3));
+
+  SMARTLIST_FOREACH(sl2, char*, line, tor_free(line));
+  smartlist_clear(sl2);
+  smartlist_split_string(sl2, "a:b:a:b", ":", 0, 0);
+  tor_free(sls1);
+  tor_free(sls2);
+  sls1 = smartlist_slice(sl1, 0, 4);
+  sls2 = smartlist_slice(sl2, 0, 4);
+  calc_changes(sls1, sls2, changed1, changed2);
+
+  /* Two elements are changed. */
+  test_assert(!bitarray_is_set(changed1, 0));
+  test_assert(bitarray_is_set(changed1, 1));
+  test_assert(bitarray_is_set(changed1, 2));
+  test_assert(!bitarray_is_set(changed1, 3));
+  bitarray_clear(changed1, 1);
+  bitarray_clear(changed1, 2);
+
+  test_assert(!bitarray_is_set(changed2, 0));
+  test_assert(bitarray_is_set(changed2, 1));
+  test_assert(!bitarray_is_set(changed2, 2));
+  test_assert(bitarray_is_set(changed2, 3));
+  bitarray_clear(changed1, 1);
+  bitarray_clear(changed1, 3);
+
+  SMARTLIST_FOREACH(sl2, char*, line, tor_free(line));
+  smartlist_clear(sl2);
+  smartlist_split_string(sl2, "b:b:b:b", ":", 0, 0);
+  tor_free(sls1);
+  tor_free(sls2);
+  sls1 = smartlist_slice(sl1, 0, 4);
+  sls2 = smartlist_slice(sl2, 0, 4);
+  calc_changes(sls1, sls2, changed1, changed2);
+
+  /* All elements are changed. */
+  test_assert(bitarray_is_set(changed1, 0));
+  test_assert(bitarray_is_set(changed1, 1));
+  test_assert(bitarray_is_set(changed1, 2));
+  test_assert(bitarray_is_set(changed1, 3));
+
+  test_assert(bitarray_is_set(changed2, 0));
+  test_assert(bitarray_is_set(changed2, 1));
+  test_assert(bitarray_is_set(changed2, 2));
+  test_assert(bitarray_is_set(changed2, 3));
 
  done:
   bitarray_free(changed1);
