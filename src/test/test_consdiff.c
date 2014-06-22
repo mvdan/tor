@@ -515,6 +515,97 @@ test_consdiff_gen_diff(void)
   test_streq(".", smartlist_get(diff, 5));
   test_streq("2d", smartlist_get(diff, 6));
 
+  /* TODO: small real use-cases, i.e. consensuses. */
+
+ done:
+  if (cons1) SMARTLIST_FOREACH(cons1, char*, line, tor_free(line));
+  if (cons2) SMARTLIST_FOREACH(cons2, char*, line, tor_free(line));
+  smartlist_free(cons1);
+  smartlist_free(cons2);
+  if (diff) SMARTLIST_FOREACH(diff, char*, line, tor_free(line));
+  smartlist_free(diff);
+}
+
+static void
+test_consdiff_apply_diff(void)
+{
+  smartlist_t *cons1, *cons2, *diff;
+  cons1 = smartlist_new();
+  diff = smartlist_new();
+
+  smartlist_split_string(cons1, "A:B:C:D:E", ":", 0, 0);
+
+  /* Command without range. */
+  smartlist_add(diff, "a");
+  cons2 = apply_diff(cons1, diff);
+  test_eq_ptr(NULL, cons2);
+
+  smartlist_clear(diff);
+
+  /* Range without command. */
+  smartlist_add(diff, "1");
+  cons2 = apply_diff(cons1, diff);
+  test_eq_ptr(NULL, cons2);
+
+  smartlist_clear(diff);
+
+  /* Range without end. */
+  smartlist_add(diff, "1,");
+  cons2 = apply_diff(cons1, diff);
+  test_eq_ptr(NULL, cons2);
+
+  smartlist_clear(diff);
+
+  /* Incoherent ranges. */
+  smartlist_add(diff, "1,1");
+  cons2 = apply_diff(cons1, diff);
+  test_eq_ptr(NULL, cons2);
+
+  smartlist_clear(diff);
+
+  smartlist_add(diff, "3,2");
+  cons2 = apply_diff(cons1, diff);
+  test_eq_ptr(NULL, cons2);
+
+  smartlist_clear(diff);
+
+  /* Script is not in reverse order. */
+  smartlist_add(diff, "1d");
+  smartlist_add(diff, "3d");
+  cons2 = apply_diff(cons1, diff);
+  test_eq_ptr(NULL, cons2);
+
+  smartlist_clear(diff);
+
+  /* Script contains unrecognised commands longer than one char. */
+  smartlist_add(diff, "1foo");
+  cons2 = apply_diff(cons1, diff);
+  test_eq_ptr(NULL, cons2);
+
+  smartlist_clear(diff);
+
+  /* Script contains unrecognised commands. */
+  smartlist_add(diff, "1e");
+  cons2 = apply_diff(cons1, diff);
+  test_eq_ptr(NULL, cons2);
+
+  smartlist_clear(diff);
+
+  /* Command that should be followed by at least one line and a ".", but
+   * isn't. */
+  smartlist_add(diff, "0a");
+  cons2 = apply_diff(cons1, diff);
+  test_eq_ptr(NULL, cons2);
+
+  /* Now it is followed by a ".", but it inserts zero lines. */
+  smartlist_add(diff, ".");
+  cons2 = apply_diff(cons1, diff);
+  test_eq_ptr(NULL, cons2);
+
+  smartlist_clear(diff);
+
+  /* TODO: basic functionalities and real use-cases with consensuses. */
+
  done:
   if (cons1) SMARTLIST_FOREACH(cons1, char*, line, tor_free(line));
   if (cons2) SMARTLIST_FOREACH(cons2, char*, line, tor_free(line));
