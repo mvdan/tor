@@ -374,6 +374,109 @@ test_consdiff_hashcmp(void)
   ;
 }
 
+static void
+test_consdiff_gen_diff(void)
+{
+  smartlist_t *cons1, *cons2, *diff;
+  cons1 = smartlist_new();
+  cons2 = smartlist_new();
+
+  /* Identity hashes are not sorted properly, return NULL. */
+  smartlist_add(cons1, "r name bbbbbbbbbbbbbbbbbbbbbbbbbbb etc");
+  smartlist_add(cons1, "foo");
+  smartlist_add(cons1, "r name aaaaaaaaaaaaaaaaaaaaaaaaaaa etc");
+  smartlist_add(cons1, "bar");
+
+  smartlist_add(cons2, "r name aaaaaaaaaaaaaaaaaaaaaaaaaaa etc");
+  smartlist_add(cons2, "foo");
+  smartlist_add(cons2, "r name ccccccccccccccccccccccccccc etc");
+  smartlist_add(cons2, "bar");
+
+  diff = gen_diff(cons1, cons2);
+  test_eq_ptr(NULL, diff);
+
+  /* Same, but now with the second consensus. */
+  diff = gen_diff(cons2, cons1);
+  test_eq_ptr(NULL, diff);
+
+  /* We have to add a line that is just a dot, return NULL. */
+  smartlist_clear(cons1);
+  smartlist_clear(cons2);
+
+  smartlist_add(cons1, "foo1");
+  smartlist_add(cons1, "foo2");
+
+  smartlist_add(cons2, "foo1");
+  smartlist_add(cons2, ".");
+  smartlist_add(cons2, "foo2");
+
+  diff = gen_diff(cons1, cons2);
+  test_eq_ptr(NULL, diff);
+
+  /* We have dot lines, but they don't interfere with the script format. */
+  smartlist_clear(cons1);
+  smartlist_clear(cons2);
+
+  smartlist_add(cons1, "foo1");
+  smartlist_add(cons1, ".");
+  smartlist_add(cons1, ".");
+  smartlist_add(cons1, "foo2");
+
+  smartlist_add(cons2, "foo1");
+  smartlist_add(cons2, ".");
+  smartlist_add(cons2, "foo2");
+
+  diff = gen_diff(cons1, cons2);
+  test_neq_ptr(NULL, diff);
+  SMARTLIST_FOREACH(diff, char*, line, tor_free(line));
+  smartlist_free(diff);
+
+  /* Empty diff tests. */
+  smartlist_clear(cons1);
+  smartlist_clear(cons2);
+
+  diff = gen_diff(cons1, cons2);
+  test_neq_ptr(NULL, diff);
+  test_eq(0, smartlist_len(diff));
+  smartlist_free(diff);
+
+  smartlist_add(cons1, "foo");
+  smartlist_add(cons1, "bar");
+
+  smartlist_add(cons2, "foo");
+  smartlist_add(cons2, "bar");
+
+  diff = gen_diff(cons1, cons2);
+  test_neq_ptr(NULL, diff);
+  test_eq(0, smartlist_len(diff));
+  smartlist_free(diff);
+
+  /* Everything is deleted. */
+  smartlist_clear(cons2);
+
+  diff = gen_diff(cons1, cons2);
+  test_neq_ptr(NULL, diff);
+  test_eq(1, smartlist_len(diff));
+  test_streq("1,2d", smartlist_get(diff, 0));
+  SMARTLIST_FOREACH(diff, char*, line, tor_free(line));
+  smartlist_free(diff);
+
+  /* Everything is added. */
+  diff = gen_diff(cons2, cons1);
+  test_neq_ptr(NULL, diff);
+  test_eq(4, smartlist_len(diff));
+  test_streq("0a", smartlist_get(diff, 0));
+  test_streq("foo", smartlist_get(diff, 1));
+  test_streq("bar", smartlist_get(diff, 2));
+  test_streq(".", smartlist_get(diff, 3));
+
+ done:
+  smartlist_free(cons1);
+  smartlist_free(cons2);
+  if (diff) SMARTLIST_FOREACH(diff, char*, line, tor_free(line));
+  smartlist_free(diff);
+}
+
 struct testcase_t consdiff_tests[] = {
   END_OF_TESTCASES
 };
