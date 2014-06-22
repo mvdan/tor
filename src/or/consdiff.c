@@ -530,6 +530,16 @@ apply_diff(smartlist_t *cons1, smartlist_t *diff)
 
     char action = *endptr2;
 
+    switch (action) {
+      case 'a':
+      case 'c':
+      case 'd':
+        break;
+      default:
+        /* Unrecognised action. */
+        goto error_cleanup;
+    }
+
     /* Add unchanged lines. */
     for (; j > end; --j) {
       const char *cons_line = smartlist_get(cons1, j-1);
