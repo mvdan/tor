@@ -235,7 +235,7 @@ get_id_hash(const char *r_line)
   hash++;
   const unsigned char *hash_end = (unsigned char*)hash;
   /* Stop when the first non-base64 character is found. */
-  while (base64_compare_table[*hash_end]) hash_end++;
+  while (base64_compare_table[*hash_end] != X) hash_end++;
   if ((char*)hash_end-hash < 27) return NULL;
   return hash;
 }
