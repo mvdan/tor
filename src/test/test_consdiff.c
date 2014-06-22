@@ -399,6 +399,17 @@ test_consdiff_gen_diff(void)
   diff = gen_diff(cons2, cons1);
   test_eq_ptr(NULL, diff);
 
+  /* Identity hashes are repeated, return NULL. */
+  smartlist_clear(cons1);
+
+  smartlist_add(cons1, "r name bbbbbbbbbbbbbbbbbbbbbbbbbbb etc");
+  smartlist_add(cons1, "foo");
+  smartlist_add(cons1, "r name bbbbbbbbbbbbbbbbbbbbbbbbbbb etc");
+  smartlist_add(cons1, "bar");
+
+  diff = gen_diff(cons1, cons2);
+  test_eq_ptr(NULL, diff);
+
   /* We have to add a line that is just a dot, return NULL. */
   smartlist_clear(cons1);
   smartlist_clear(cons2);
@@ -458,6 +469,7 @@ test_consdiff_gen_diff(void)
   test_neq_ptr(NULL, diff);
   test_eq(1, smartlist_len(diff));
   test_streq("1,2d", smartlist_get(diff, 0));
+
   SMARTLIST_FOREACH(diff, char*, line, tor_free(line));
   smartlist_free(diff);
 
@@ -470,7 +482,42 @@ test_consdiff_gen_diff(void)
   test_streq("bar", smartlist_get(diff, 2));
   test_streq(".", smartlist_get(diff, 3));
 
+  SMARTLIST_FOREACH(diff, char*, line, tor_free(line));
+  smartlist_free(diff);
+
+  /* Everything is changed. */
+  smartlist_add(cons2, "foo2");
+  smartlist_add(cons2, "bar2");
+  diff = gen_diff(cons1, cons2);
+  test_neq_ptr(NULL, diff);
+  test_eq(4, smartlist_len(diff));
+  test_streq("1,2c", smartlist_get(diff, 0));
+  test_streq("foo2", smartlist_get(diff, 1));
+  test_streq("bar2", smartlist_get(diff, 2));
+  test_streq(".", smartlist_get(diff, 3));
+
+  SMARTLIST_FOREACH(diff, char*, line, tor_free(line));
+  smartlist_free(diff);
+
+  /* Test 'a', 'c' and 'd' together. See that it is done in reverse order. */
+  smartlist_clear(cons1);
+  smartlist_clear(cons2);
+  smartlist_split_string(cons1, "A:B:C:D:E", ":", 0, 0);
+  smartlist_split_string(cons2, "A:C:O:E:U", ":", 0, 0);
+  diff = gen_diff(cons1, cons2);
+  test_neq_ptr(NULL, diff);
+  test_eq(7, smartlist_len(diff));
+  test_streq("5a", smartlist_get(diff, 0));
+  test_streq("U", smartlist_get(diff, 1));
+  test_streq(".", smartlist_get(diff, 2));
+  test_streq("4c", smartlist_get(diff, 3));
+  test_streq("O", smartlist_get(diff, 4));
+  test_streq(".", smartlist_get(diff, 5));
+  test_streq("2d", smartlist_get(diff, 6));
+
  done:
+  if (cons1) SMARTLIST_FOREACH(cons1, char*, line, tor_free(line));
+  if (cons2) SMARTLIST_FOREACH(cons2, char*, line, tor_free(line));
   smartlist_free(cons1);
   smartlist_free(cons2);
   if (diff) SMARTLIST_FOREACH(diff, char*, line, tor_free(line));
