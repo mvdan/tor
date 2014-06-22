@@ -278,6 +278,101 @@ test_consdiff_calc_changes(void)
   tor_free(sls2);
 }
 
+static void
+test_consdiff_get_id_hash(void)
+{
+  /* No hash. */
+  test_eq_ptr(NULL, get_id_hash("r name"));
+  /* The hash is too short. */
+  test_eq_ptr(NULL, get_id_hash("r name hash etc"));
+  /* The hash contains characters that are not base64. */
+  test_eq_ptr(NULL, get_id_hash("r name hash_longer_than_27_chars_but_isnt_base64 etc"));
+
+  char *line = "r name hash+longer+than+27+chars+and+valid+base64 etc";
+  char *e_hash = line+7;
+  test_eq_ptr(e_hash, get_id_hash(line));
+
+ done:
+  ;
+}
+
+static void
+test_consdiff_is_valid_router_entry(void)
+{
+  /* Doesn't start with "r ". */
+  test_eq(0, is_valid_router_entry("foo"));
+
+  /* These are already tested with get_id_hash, but make sure it's run
+   * properly. */
+
+  test_eq(0, is_valid_router_entry("r name"));
+  test_eq(0, is_valid_router_entry("r name hash etc"));
+  test_eq(0, is_valid_router_entry("r name hash_longer_than_27_chars_but_isnt_base64 etc"));
+
+  test_eq(1, is_valid_router_entry("r name hash+longer+than+27+chars+and+valid+base64 etc"));
+
+ done:
+  ;
+}
+
+static void
+test_consdiff_next_router(void)
+{
+  smartlist_t *sl = smartlist_new();
+  smartlist_add(sl, "foo");
+  smartlist_add(sl, "r name hash+longer+than+27+chars+and+valid+base64 etc");
+  smartlist_add(sl, "foo");
+  smartlist_add(sl, "foo");
+  smartlist_add(sl, "r name hash+longer+than+27+chars+and+valid+base64 etc");
+  smartlist_add(sl, "foo");
+
+  /* Not currently on a router entry line, finding the next one. */
+  test_eq(1, next_router(sl, 0));
+  test_eq(4, next_router(sl, 2));
+
+  /* Already at the beginning of a router entry line, ignore it. */
+  test_eq(4, next_router(sl, 1));
+
+  /* There are no more router entries, so return the line after the last. */
+  test_eq(6, next_router(sl, 5));
+
+ done:
+  smartlist_free(sl);
+}
+
+static void
+test_consdiff_hashcmp(void)
+{
+  /* NULL arguments. */
+  test_eq(0, hashcmp(NULL, NULL));
+  test_eq(-1, hashcmp(NULL, "foo"));
+  test_eq(1, hashcmp("bar", NULL));
+
+  /* Nil base64 values. */
+  test_eq(0, hashcmp("", ""));
+  test_eq(0, hashcmp("_", "&"));
+
+  /* Exact same valid strings. */
+  test_eq(0, hashcmp("abcABC/+", "abcABC/+"));
+  /* Both end with an invalid base64 char other than '\0'. */
+  test_eq(0, hashcmp("abcABC/+ ", "abcABC/+ "));
+  /* Only one ends with an invalid base64 char other than '\0'. */
+  test_eq(0, hashcmp("abcABC/+ ", "abcABC/+"));
+
+  /* Comparisons that would return differently with strcmp(). */
+  test_eq(-1, strcmp("/foo", "Afoo"));
+  test_eq(1, hashcmp("/foo", "Afoo"));
+  test_eq(1, strcmp("Afoo", "0foo"));
+  test_eq(-1, hashcmp("Afoo", "0foo"));
+
+  /* Comparisons that would return the same as with strcmp(). */
+  test_eq(1, strcmp("afoo", "Afoo"));
+  test_eq(1, hashcmp("afoo", "Afoo"));
+
+ done:
+  ;
+}
+
 struct testcase_t consdiff_tests[] = {
   END_OF_TESTCASES
 };
