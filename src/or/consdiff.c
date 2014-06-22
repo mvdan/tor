@@ -501,6 +501,7 @@ apply_diff(smartlist_t *cons1, smartlist_t *diff)
     const char *diff_line = smartlist_get(diff, i);
     char *endptr1, *endptr2;
     int start, end;
+
 #define LINE_BASE 10
     start = (int)strtol(diff_line, &endptr1, LINE_BASE);
 
@@ -514,6 +515,8 @@ apply_diff(smartlist_t *cons1, smartlist_t *diff)
         if (endptr2 == endptr1+1) goto error_cleanup;
         /* Incoherent range. */
         if (end <= start) goto error_cleanup;
+        /* The diff is not in reverse order. */
+        if (end >= j) goto error_cleanup;
 
     /* We'll take <n1> as <n1>,<n1> for simplicity. */
     } else {
