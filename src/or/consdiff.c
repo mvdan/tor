@@ -85,26 +85,28 @@ lcs_lens(smartlist_slice_t *slice1, smartlist_slice_t *slice2, int direction)
 static void
 trim_slices(smartlist_slice_t *slice1, smartlist_slice_t *slice2)
 {
-  const char *line1 = smartlist_get(slice1->list, slice1->offset);
-  const char *line2 = smartlist_get(slice2->list, slice2->offset);
+  const char *line1 = NULL;
+  const char *line2 = NULL;
 
-  while (slice1->len>0 && slice2->len>0 && !strcmp(line1, line2)) {
-    slice1->offset++; slice1->len--;
-    slice2->offset++; slice2->len--;
+  while (slice1->len>0 && slice2->len>0) {
     line1 = smartlist_get(slice1->list, slice1->offset);
     line2 = smartlist_get(slice2->list, slice2->offset);
+    if (strcmp(line1, line2)) break;
+    slice1->offset++; slice1->len--;
+    slice2->offset++; slice2->len--;
   }
 
   int i1 = (slice1->offset+slice1->len)-1;
   int i2 = (slice2->offset+slice2->len)-1;
-  line1 = smartlist_get(slice1->list, i1);
-  line2 = smartlist_get(slice2->list, i2);
+  line1 = NULL;
+  line2 = NULL;
 
-  while (slice1->len>0 && slice2->len>0 && !strcmp(line1, line2)) {
-    i1--; slice1->len--;
-    i2--; slice2->len--;
+  while (slice1->len>0 && slice2->len>0) {
     line1 = smartlist_get(slice1->list, i1);
     line2 = smartlist_get(slice2->list, i2);
+    if (strcmp(line1, line2)) break;
+    i1--; slice1->len--;
+    i2--; slice2->len--;
   }
 
 }
