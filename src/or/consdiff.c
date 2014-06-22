@@ -12,8 +12,11 @@ static smartlist_slice_t *
 smartlist_slice(smartlist_t *list, int offset, int len)
 {
   int list_len = smartlist_len(list);
-  tor_assert(offset >= 0 && offset < list_len);
+  tor_assert(offset >= 0);
+  /* If we are making a slice out of an empty list, ignore the 0<0 failure. */
+  tor_assert(offset < list_len || list_len == 0);
   tor_assert(len >= 0 && offset+len <= list_len);
+
   smartlist_slice_t *slice = tor_malloc(sizeof(smartlist_slice_t));
   slice->list = list;
   slice->offset = offset;
