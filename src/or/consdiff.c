@@ -118,6 +118,7 @@ static void
 set_changed(bitarray_t *changed1, bitarray_t *changed2,
     smartlist_slice_t *slice1, smartlist_slice_t *slice2)
 {
+  tor_assert(slice1->len == 0 || slice1->len == 1);
   int toskip = -1;
   if (slice1->len == 1) {
     const char *line_common = smartlist_get(slice1->list, slice1->offset);
