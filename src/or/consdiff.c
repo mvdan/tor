@@ -230,12 +230,17 @@ static const char *
 get_id_hash(const char *r_line)
 {
   r_line += strlen("r ");
+
+  /* Skip the router name. */
   const char *hash = strchr(r_line, ' ');
   if (hash == NULL) return NULL;
+
   hash++;
   const unsigned char *hash_end = (unsigned char*)hash;
   /* Stop when the first non-base64 character is found. */
   while (base64_compare_table[*hash_end] != X) hash_end++;
+
+  /* The minimum length is 27 characters. */
   if ((char*)hash_end-hash < 27) return NULL;
   return hash;
 }
