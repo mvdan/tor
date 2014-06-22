@@ -556,12 +556,17 @@ apply_diff(smartlist_t *cons1, smartlist_t *diff)
     if (action == 'a' || action == 'c') {
       int added_end = i;
 
-      /* It would make no sense to add zero new lines. */
-      if (!strcmp(smartlist_get(diff, ++i), ".")) goto error_cleanup;
+      i++; /* Skip the line with the range and command. */
+      while (i < diff_len) {
+        if (!strcmp(smartlist_get(diff, i), ".")) break;
+        /* Got to the end of the diff before finding ".". */
+        if (++i == diff_len) goto error_cleanup;
+      }
 
-      /* Fetch the reverse start of the added lines. */
-      while (strcmp(smartlist_get(diff, ++i), ".")) ;
       int added_i = i-1;
+
+      /* It would make no sense to add zero new lines. */
+      if (added_i == added_end) goto error_cleanup;
 
       while (added_i > added_end) {
         const char *added_line = smartlist_get(diff, added_i--);
