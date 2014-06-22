@@ -38,6 +38,8 @@ smartlist_slice_string_pos(smartlist_slice_t *slice, const char *string)
  * Used as part of the diff generation to find the column at which to split
  * slice2 (divide and conquer) while still having the optimal solution.
  * If direction is -1, the navigation is reversed. Otherwise it must be 1.
+ * The length of the resulting integer array is that of the second slice plus
+ * one.
  */
 static int *
 lcs_lens(smartlist_slice_t *slice1, smartlist_slice_t *slice2, int direction)
