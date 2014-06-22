@@ -41,7 +41,7 @@ test_consdiff_smartlist_slice_string_pos(void)
 
  done:
   tor_free(sls);
-  SMARTLIST_FOREACH(sl, char*, line, tor_free(line));
+  if (sl) SMARTLIST_FOREACH(sl, char*, line, tor_free(line));
   smartlist_free(sl);
 }
 
@@ -72,8 +72,8 @@ test_consdiff_lcs_lens(void)
   tor_free(lens2);
   tor_free(sls1);
   tor_free(sls2);
-  SMARTLIST_FOREACH(sl1, char*, line, tor_free(line));
-  SMARTLIST_FOREACH(sl2, char*, line, tor_free(line));
+  if (sl1) SMARTLIST_FOREACH(sl1, char*, line, tor_free(line));
+  if (sl2) SMARTLIST_FOREACH(sl2, char*, line, tor_free(line));
   smartlist_free(sl1);
   smartlist_free(sl2);
 }
@@ -115,10 +115,10 @@ test_consdiff_trim_slices(void)
   tor_free(sls2);
   tor_free(sls3);
   tor_free(sls4);
-  SMARTLIST_FOREACH(sl1, char*, line, tor_free(line));
-  SMARTLIST_FOREACH(sl2, char*, line, tor_free(line));
-  SMARTLIST_FOREACH(sl3, char*, line, tor_free(line));
-  SMARTLIST_FOREACH(sl4, char*, line, tor_free(line));
+  if (sl1) SMARTLIST_FOREACH(sl1, char*, line, tor_free(line));
+  if (sl2) SMARTLIST_FOREACH(sl2, char*, line, tor_free(line));
+  if (sl3) SMARTLIST_FOREACH(sl3, char*, line, tor_free(line));
+  if (sl4) SMARTLIST_FOREACH(sl4, char*, line, tor_free(line));
   smartlist_free(sl1);
   smartlist_free(sl2);
   smartlist_free(sl3);
@@ -190,8 +190,8 @@ test_consdiff_set_changed(void)
  done:
   bitarray_free(changed1);
   bitarray_free(changed2);
-  SMARTLIST_FOREACH(sl1, char*, line, tor_free(line));
-  SMARTLIST_FOREACH(sl2, char*, line, tor_free(line));
+  if (sl1) SMARTLIST_FOREACH(sl1, char*, line, tor_free(line));
+  if (sl2) SMARTLIST_FOREACH(sl2, char*, line, tor_free(line));
   smartlist_free(sl1);
   smartlist_free(sl2);
   tor_free(sls1);
@@ -271,8 +271,8 @@ test_consdiff_calc_changes(void)
  done:
   bitarray_free(changed1);
   bitarray_free(changed2);
-  SMARTLIST_FOREACH(sl1, char*, line, tor_free(line));
-  SMARTLIST_FOREACH(sl2, char*, line, tor_free(line));
+  if (sl1) SMARTLIST_FOREACH(sl1, char*, line, tor_free(line));
+  if (sl2) SMARTLIST_FOREACH(sl2, char*, line, tor_free(line));
   smartlist_free(sl1);
   smartlist_free(sl2);
   tor_free(sls1);
