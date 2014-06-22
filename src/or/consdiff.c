@@ -515,14 +515,15 @@ apply_diff(smartlist_t *cons1, smartlist_t *diff)
         if (endptr2 == endptr1+1) goto error_cleanup;
         /* Incoherent range. */
         if (end <= start) goto error_cleanup;
-        /* The diff is not in reverse order. */
-        if (end >= j) goto error_cleanup;
 
     /* We'll take <n1> as <n1>,<n1> for simplicity. */
     } else {
         endptr2 = endptr1;
         end = start;
     }
+
+    /* The diff is not in reverse order. */
+    if (end >= j) goto error_cleanup;
 
     /* Action is longer than one char. */
     if (*(endptr2+1) != '\0') goto error_cleanup;
