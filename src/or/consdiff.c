@@ -200,6 +200,29 @@ calc_changes(smartlist_slice_t *slice1, smartlist_slice_t *slice2,
   }
 }
 
+/* This table is from crypto.c. The SP and PAD defines are different. */
+#define X 255
+#define SP X
+#define PAD X
+static const uint8_t base64_compare_table[256] = {
+  X, X, X, X, X, X, X, X, X, SP, SP, SP, X, SP, X, X,
+  X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X,
+  SP, X, X, X, X, X, X, X, X, X, X, 62, X, X, X, 63,
+  52, 53, 54, 55, 56, 57, 58, 59, 60, 61, X, X, X, PAD, X, X,
+  X, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14,
+  15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, X, X, X, X, X,
+  X, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
+  41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, X, X, X, X, X,
+  X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X,
+  X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X,
+  X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X,
+  X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X,
+  X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X,
+  X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X,
+  X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X,
+  X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X,
+};
+
 /** Helper: Get the identity hash from a router line, assuming that the line
  * at least appears to be a router line and thus starts with "r ".
  */
@@ -210,9 +233,10 @@ get_id_hash(const char *r_line)
   const char *hash = strchr(r_line, ' ');
   if (hash == NULL) return NULL;
   hash++;
-  const char *hash_end = strchr(hash, ' ');
-  if (hash_end == NULL) return NULL;
-  if (hash_end-hash < 27) return NULL;
+  const unsigned char *hash_end = (unsigned char*)hash;
+  /* Stop when the first non-base64 character is found. */
+  while (base64_compare_table[*hash_end]) hash_end++;
+  if ((char*)hash_end-hash < 27) return NULL;
   return hash;
 }
 
@@ -243,29 +267,6 @@ next_router(smartlist_t *cons, int cur)
   }
   return cur;
 }
-
-/* This table is from crypto.c. The SP and PAD defines are different. */
-#define X 255
-#define SP X
-#define PAD X
-static const uint8_t base64_compare_table[256] = {
-  X, X, X, X, X, X, X, X, X, SP, SP, SP, X, SP, X, X,
-  X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X,
-  SP, X, X, X, X, X, X, X, X, X, X, 62, X, X, X, 63,
-  52, 53, 54, 55, 56, 57, 58, 59, 60, 61, X, X, X, PAD, X, X,
-  X, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14,
-  15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, X, X, X, X, X,
-  X, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
-  41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, X, X, X, X, X,
-  X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X,
-  X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X,
-  X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X,
-  X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X,
-  X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X,
-  X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X,
-  X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X,
-  X, X, X, X, X, X, X, X, X, X, X, X, X, X, X, X,
-};
 
 /** Helper: compare two base64-encoded identity hashes which may be of
  * different lengths. Comparison ends when the first non-base64 char is found.
