@@ -375,7 +375,7 @@ test_consdiff_hashcmp(void)
 }
 
 static void
-test_consdiff_gen_diff(void)
+test_consdiff_gen_ed_diff(void)
 {
   smartlist_t *cons1, *cons2, *diff;
   cons1 = smartlist_new();
@@ -392,11 +392,11 @@ test_consdiff_gen_diff(void)
   smartlist_add(cons2, "r name ccccccccccccccccccccccccccc etc");
   smartlist_add(cons2, "bar");
 
-  diff = gen_diff(cons1, cons2);
+  diff = gen_ed_diff(cons1, cons2);
   test_eq_ptr(NULL, diff);
 
   /* Same, but now with the second consensus. */
-  diff = gen_diff(cons2, cons1);
+  diff = gen_ed_diff(cons2, cons1);
   test_eq_ptr(NULL, diff);
 
   /* Identity hashes are repeated, return NULL. */
@@ -407,7 +407,7 @@ test_consdiff_gen_diff(void)
   smartlist_add(cons1, "r name bbbbbbbbbbbbbbbbbbbbbbbbbbb etc");
   smartlist_add(cons1, "bar");
 
-  diff = gen_diff(cons1, cons2);
+  diff = gen_ed_diff(cons1, cons2);
   test_eq_ptr(NULL, diff);
 
   /* We have to add a line that is just a dot, return NULL. */
@@ -421,7 +421,7 @@ test_consdiff_gen_diff(void)
   smartlist_add(cons2, ".");
   smartlist_add(cons2, "foo2");
 
-  diff = gen_diff(cons1, cons2);
+  diff = gen_ed_diff(cons1, cons2);
   test_eq_ptr(NULL, diff);
 
   /* We have dot lines, but they don't interfere with the script format. */
@@ -437,7 +437,7 @@ test_consdiff_gen_diff(void)
   smartlist_add(cons2, ".");
   smartlist_add(cons2, "foo2");
 
-  diff = gen_diff(cons1, cons2);
+  diff = gen_ed_diff(cons1, cons2);
   test_neq_ptr(NULL, diff);
   SMARTLIST_FOREACH(diff, char*, line, tor_free(line));
   smartlist_free(diff);
@@ -446,7 +446,7 @@ test_consdiff_gen_diff(void)
   smartlist_clear(cons1);
   smartlist_clear(cons2);
 
-  diff = gen_diff(cons1, cons2);
+  diff = gen_ed_diff(cons1, cons2);
   test_neq_ptr(NULL, diff);
   test_eq(0, smartlist_len(diff));
   smartlist_free(diff);
@@ -457,7 +457,7 @@ test_consdiff_gen_diff(void)
   smartlist_add(cons2, "foo");
   smartlist_add(cons2, "bar");
 
-  diff = gen_diff(cons1, cons2);
+  diff = gen_ed_diff(cons1, cons2);
   test_neq_ptr(NULL, diff);
   test_eq(0, smartlist_len(diff));
   smartlist_free(diff);
@@ -465,7 +465,7 @@ test_consdiff_gen_diff(void)
   /* Everything is deleted. */
   smartlist_clear(cons2);
 
-  diff = gen_diff(cons1, cons2);
+  diff = gen_ed_diff(cons1, cons2);
   test_neq_ptr(NULL, diff);
   test_eq(1, smartlist_len(diff));
   test_streq("1,2d", smartlist_get(diff, 0));
@@ -474,7 +474,7 @@ test_consdiff_gen_diff(void)
   smartlist_free(diff);
 
   /* Everything is added. */
-  diff = gen_diff(cons2, cons1);
+  diff = gen_ed_diff(cons2, cons1);
   test_neq_ptr(NULL, diff);
   test_eq(4, smartlist_len(diff));
   test_streq("0a", smartlist_get(diff, 0));
@@ -488,7 +488,7 @@ test_consdiff_gen_diff(void)
   /* Everything is changed. */
   smartlist_add(cons2, "foo2");
   smartlist_add(cons2, "bar2");
-  diff = gen_diff(cons1, cons2);
+  diff = gen_ed_diff(cons1, cons2);
   test_neq_ptr(NULL, diff);
   test_eq(4, smartlist_len(diff));
   test_streq("1,2c", smartlist_get(diff, 0));
@@ -504,7 +504,7 @@ test_consdiff_gen_diff(void)
   smartlist_clear(cons2);
   smartlist_split_string(cons1, "A:B:C:D:E", ":", 0, 0);
   smartlist_split_string(cons2, "A:C:O:E:U", ":", 0, 0);
-  diff = gen_diff(cons1, cons2);
+  diff = gen_ed_diff(cons1, cons2);
   test_neq_ptr(NULL, diff);
   test_eq(7, smartlist_len(diff));
   test_streq("5a", smartlist_get(diff, 0));
@@ -527,7 +527,7 @@ test_consdiff_gen_diff(void)
 }
 
 static void
-test_consdiff_apply_diff(void)
+test_consdiff_apply_ed_diff(void)
 {
   smartlist_t *cons1, *cons2, *diff;
   cons1 = smartlist_new();
@@ -537,34 +537,34 @@ test_consdiff_apply_diff(void)
 
   /* Command without range. */
   smartlist_add(diff, "a");
-  cons2 = apply_diff(cons1, diff);
+  cons2 = apply_ed_diff(cons1, diff);
   test_eq_ptr(NULL, cons2);
 
   smartlist_clear(diff);
 
   /* Range without command. */
   smartlist_add(diff, "1");
-  cons2 = apply_diff(cons1, diff);
+  cons2 = apply_ed_diff(cons1, diff);
   test_eq_ptr(NULL, cons2);
 
   smartlist_clear(diff);
 
   /* Range without end. */
   smartlist_add(diff, "1,");
-  cons2 = apply_diff(cons1, diff);
+  cons2 = apply_ed_diff(cons1, diff);
   test_eq_ptr(NULL, cons2);
 
   smartlist_clear(diff);
 
   /* Incoherent ranges. */
   smartlist_add(diff, "1,1");
-  cons2 = apply_diff(cons1, diff);
+  cons2 = apply_ed_diff(cons1, diff);
   test_eq_ptr(NULL, cons2);
 
   smartlist_clear(diff);
 
   smartlist_add(diff, "3,2");
-  cons2 = apply_diff(cons1, diff);
+  cons2 = apply_ed_diff(cons1, diff);
   test_eq_ptr(NULL, cons2);
 
   smartlist_clear(diff);
@@ -572,21 +572,21 @@ test_consdiff_apply_diff(void)
   /* Script is not in reverse order. */
   smartlist_add(diff, "1d");
   smartlist_add(diff, "3d");
-  cons2 = apply_diff(cons1, diff);
+  cons2 = apply_ed_diff(cons1, diff);
   test_eq_ptr(NULL, cons2);
 
   smartlist_clear(diff);
 
   /* Script contains unrecognised commands longer than one char. */
   smartlist_add(diff, "1foo");
-  cons2 = apply_diff(cons1, diff);
+  cons2 = apply_ed_diff(cons1, diff);
   test_eq_ptr(NULL, cons2);
 
   smartlist_clear(diff);
 
   /* Script contains unrecognised commands. */
   smartlist_add(diff, "1e");
-  cons2 = apply_diff(cons1, diff);
+  cons2 = apply_ed_diff(cons1, diff);
   test_eq_ptr(NULL, cons2);
 
   smartlist_clear(diff);
@@ -594,17 +594,77 @@ test_consdiff_apply_diff(void)
   /* Command that should be followed by at least one line and a ".", but
    * isn't. */
   smartlist_add(diff, "0a");
-  cons2 = apply_diff(cons1, diff);
+  cons2 = apply_ed_diff(cons1, diff);
   test_eq_ptr(NULL, cons2);
 
   /* Now it is followed by a ".", but it inserts zero lines. */
   smartlist_add(diff, ".");
-  cons2 = apply_diff(cons1, diff);
+  cons2 = apply_ed_diff(cons1, diff);
   test_eq_ptr(NULL, cons2);
 
   smartlist_clear(diff);
 
-  /* TODO: basic functionalities and real use-cases with consensuses. */
+  /* Test appending text, 'a'. */
+  smartlist_split_string(diff, "3a:U:O:.:0a:V:.", ":", 0, 0);
+  cons2 = apply_ed_diff(cons1, diff);
+  test_neq_ptr(NULL, cons2);
+  test_eq(8, smartlist_len(cons2));
+  test_streq("V", smartlist_get(cons2, 0));
+  test_streq("A", smartlist_get(cons2, 1));
+  test_streq("B", smartlist_get(cons2, 2));
+  test_streq("C", smartlist_get(cons2, 3));
+  test_streq("U", smartlist_get(cons2, 4));
+  test_streq("O", smartlist_get(cons2, 5));
+  test_streq("D", smartlist_get(cons2, 6));
+  test_streq("E", smartlist_get(cons2, 7));
+
+  SMARTLIST_FOREACH(diff, char*, line, tor_free(line));
+  smartlist_clear(diff);
+  SMARTLIST_FOREACH(cons2, char*, line, tor_free(line));
+  smartlist_free(cons2);
+
+  /* Test deleting text, 'd'. */
+  smartlist_split_string(diff, "4d:1,2d", ":", 0, 0);
+  cons2 = apply_ed_diff(cons1, diff);
+  test_neq_ptr(NULL, cons2);
+  test_eq(2, smartlist_len(cons2));
+  test_streq("C", smartlist_get(cons2, 0));
+  test_streq("E", smartlist_get(cons2, 1));
+
+  SMARTLIST_FOREACH(diff, char*, line, tor_free(line));
+  smartlist_clear(diff);
+  SMARTLIST_FOREACH(cons2, char*, line, tor_free(line));
+  smartlist_free(cons2);
+
+  /* Test changing text, 'c'. */
+  smartlist_split_string(diff, "4c:T:X:.:1,2c:M:.", ":", 0, 0);
+  cons2 = apply_ed_diff(cons1, diff);
+  test_neq_ptr(NULL, cons2);
+  test_eq(5, smartlist_len(cons2));
+  test_streq("M", smartlist_get(cons2, 0));
+  test_streq("C", smartlist_get(cons2, 1));
+  test_streq("T", smartlist_get(cons2, 2));
+  test_streq("X", smartlist_get(cons2, 3));
+  test_streq("E", smartlist_get(cons2, 4));
+
+  SMARTLIST_FOREACH(diff, char*, line, tor_free(line));
+  smartlist_clear(diff);
+  SMARTLIST_FOREACH(cons2, char*, line, tor_free(line));
+  smartlist_free(cons2);
+
+  /* Test 'a', 'd' and 'c' together. */
+  smartlist_split_string(diff, "4c:T:X:.:2d:0a:M:.", ":", 0, 0);
+  cons2 = apply_ed_diff(cons1, diff);
+  test_neq_ptr(NULL, cons2);
+  test_eq(6, smartlist_len(cons2));
+  test_streq("M", smartlist_get(cons2, 0));
+  test_streq("A", smartlist_get(cons2, 1));
+  test_streq("C", smartlist_get(cons2, 2));
+  test_streq("T", smartlist_get(cons2, 3));
+  test_streq("X", smartlist_get(cons2, 4));
+  test_streq("E", smartlist_get(cons2, 5));
+
+  /* TODO: real use-cases with consensuses. */
 
  done:
   if (cons1) SMARTLIST_FOREACH(cons1, char*, line, tor_free(line));
