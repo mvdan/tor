@@ -605,7 +605,67 @@ test_consdiff_apply_diff(void)
 
   smartlist_clear(diff);
 
-  /* TODO: basic functionalities and real use-cases with consensuses. */
+  /* Test appending text, 'a'. */
+  smartlist_split_string(diff, "3a:U:O:.:0a:V:.", ":", 0, 0);
+  cons2 = apply_diff(cons1, diff);
+  test_neq_ptr(NULL, cons2);
+  test_eq(8, smartlist_len(cons2));
+  test_streq("V", smartlist_get(cons2, 0));
+  test_streq("A", smartlist_get(cons2, 1));
+  test_streq("B", smartlist_get(cons2, 2));
+  test_streq("C", smartlist_get(cons2, 3));
+  test_streq("U", smartlist_get(cons2, 4));
+  test_streq("O", smartlist_get(cons2, 5));
+  test_streq("D", smartlist_get(cons2, 6));
+  test_streq("E", smartlist_get(cons2, 7));
+
+  SMARTLIST_FOREACH(diff, char*, line, tor_free(line));
+  smartlist_clear(diff);
+  SMARTLIST_FOREACH(cons2, char*, line, tor_free(line));
+  smartlist_free(cons2);
+
+  /* Test deleting text, 'd'. */
+  smartlist_split_string(diff, "4d:1,2d", ":", 0, 0);
+  cons2 = apply_diff(cons1, diff);
+  test_neq_ptr(NULL, cons2);
+  test_eq(2, smartlist_len(cons2));
+  test_streq("C", smartlist_get(cons2, 0));
+  test_streq("E", smartlist_get(cons2, 1));
+
+  SMARTLIST_FOREACH(diff, char*, line, tor_free(line));
+  smartlist_clear(diff);
+  SMARTLIST_FOREACH(cons2, char*, line, tor_free(line));
+  smartlist_free(cons2);
+
+  /* Test changing text, 'c'. */
+  smartlist_split_string(diff, "4c:T:X:.:1,2c:M:.", ":", 0, 0);
+  cons2 = apply_diff(cons1, diff);
+  test_neq_ptr(NULL, cons2);
+  test_eq(5, smartlist_len(cons2));
+  test_streq("M", smartlist_get(cons2, 0));
+  test_streq("C", smartlist_get(cons2, 1));
+  test_streq("T", smartlist_get(cons2, 2));
+  test_streq("X", smartlist_get(cons2, 3));
+  test_streq("E", smartlist_get(cons2, 4));
+
+  SMARTLIST_FOREACH(diff, char*, line, tor_free(line));
+  smartlist_clear(diff);
+  SMARTLIST_FOREACH(cons2, char*, line, tor_free(line));
+  smartlist_free(cons2);
+
+  /* Test 'a', 'd' and 'c' together. */
+  smartlist_split_string(diff, "4c:T:X:.:2d:0a:M:.", ":", 0, 0);
+  cons2 = apply_diff(cons1, diff);
+  test_neq_ptr(NULL, cons2);
+  test_eq(6, smartlist_len(cons2));
+  test_streq("M", smartlist_get(cons2, 0));
+  test_streq("A", smartlist_get(cons2, 1));
+  test_streq("C", smartlist_get(cons2, 2));
+  test_streq("T", smartlist_get(cons2, 3));
+  test_streq("X", smartlist_get(cons2, 4));
+  test_streq("E", smartlist_get(cons2, 5));
+
+  /* TODO: real use-cases with consensuses. */
 
  done:
   if (cons1) SMARTLIST_FOREACH(cons1, char*, line, tor_free(line));
