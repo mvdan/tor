@@ -8,5 +8,5 @@ typedef struct {
   int len;
 } smartlist_slice_t;
 
-smartlist_t *gen_diff(smartlist_t *cons1, smartlist_t *cons2);
-smartlist_t *apply_diff(smartlist_t *cons1, smartlist_t *diff);
+smartlist_t *consdiff_gen_diff(smartlist_t *cons1, smartlist_t *cons2);
+smartlist_t *consdiff_apply_diff(smartlist_t *cons1, smartlist_t *diff);
