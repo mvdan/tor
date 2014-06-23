@@ -315,11 +315,10 @@ hashcmp(const char *hash1, const char *hash2)
 /** Generate an ed diff as a smartlist from two consensuses, also given as
  * smartlists. Will return NULL if the diff could not be generated, which can
  * happen if any lines the script had to add matched "." or if the routers
- * were not properly ordered. Neither of the two consensuses are modified in
- * any way, so it's up to the caller to free their resources.
+ * were not properly ordered.
  */
-smartlist_t *
-gen_diff(smartlist_t *cons1, smartlist_t *cons2)
+static smartlist_t *
+gen_ed_diff(smartlist_t *cons1, smartlist_t *cons2)
 {
   int len1 = smartlist_len(cons1);
   int len2 = smartlist_len(cons2);
@@ -484,14 +483,24 @@ error_cleanup:
   return NULL;
 }
 
-/** Apply the diff to the consensus and return a new consensus, also as a
- * line-based smartlist. Will return NULL if the ed diff is not properly
- * formatted. Neither the consensus nor the diff are modified in any way, so
- * it's up to the caller to free their resources.
+/** Generate a consensus diff as a smartlist from two given consensuses, also
+ * as smartlists. Will return NULL if the consensus diff could not be
+ * generated. Neither of the two consensuses are modified in any way, so it's
+ * up to the caller to free their resources.
  */
-
 smartlist_t *
-apply_diff(smartlist_t *cons1, smartlist_t *diff)
+consdiff_gen_diff(smartlist_t *cons1, smartlist_t *cons2)
+{
+  smartlist_t *ed_diff = gen_ed_diff(cons1, cons2);
+  return ed_diff;
+}
+
+/** Apply the ed diff to the consensus and return a new consensus, also as a
+ * line-based smartlist. Will return NULL if the ed diff is not properly
+ * formatted.
+ */
+static smartlist_t *
+apply_ed_diff(smartlist_t *cons1, smartlist_t *diff)
 {
   int i, diff_len = smartlist_len(diff);
   int j = smartlist_len(cons1);
@@ -593,5 +602,19 @@ error_cleanup:
 
   return NULL;
 }
+
+/** Apply the consensus diff to the given consensus and return a new
+ * consensus, also as a line-based smartlist. Will return NULL if the diff
+ * could not be applied. Neither the consensus nor the diff are modified in
+ * any way, so it's up to the caller to free their resources.
+ */
+smartlist_t *
+consdiff_apply_diff(smartlist_t *cons1, smartlist_t *diff)
+{
+  smartlist_t *cons2 = apply_ed_diff(cons1, diff);
+  return cons2;
+}
+
+// vim: et sw=2
 
 // vim: et sw=2
