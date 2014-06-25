@@ -15,7 +15,7 @@ main(int argc, char **argv)
 
   tor_split_lines(cons1, cons1_str, strlen(cons1_str));
   tor_split_lines(diff, diff_str, strlen(diff_str));
-  smartlist_t *cons2 = apply_diff(cons1, diff);
+  smartlist_t *cons2 = consdiff_apply_diff(cons1, diff);
   if (cons2 == NULL) {
     fprintf(stderr, "Something went wrong.\n");
   } else {
