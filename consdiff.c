@@ -483,18 +483,6 @@ error_cleanup:
   return NULL;
 }
 
-/** Generate a consensus diff as a smartlist from two given consensuses, also
- * as smartlists. Will return NULL if the consensus diff could not be
- * generated. Neither of the two consensuses are modified in any way, so it's
- * up to the caller to free their resources.
- */
-smartlist_t *
-consdiff_gen_diff(smartlist_t *cons1, smartlist_t *cons2)
-{
-  smartlist_t *ed_diff = gen_ed_diff(cons1, cons2);
-  return ed_diff;
-}
-
 /** Apply the ed diff to the consensus and return a new consensus, also as a
  * line-based smartlist. Will return NULL if the ed diff is not properly
  * formatted.
@@ -603,6 +591,40 @@ error_cleanup:
   return NULL;
 }
 
+/** Generate a consensus diff as a smartlist from two given consensuses, also
+ * as smartlists. Will return NULL if the consensus diff could not be
+ * generated. Neither of the two consensuses are modified in any way, so it's
+ * up to the caller to free their resources.
+ */
+smartlist_t *
+consdiff_gen_diff(smartlist_t *cons1, smartlist_t *cons2)
+{
+  smartlist_t *ed_diff = gen_ed_diff(cons1, cons2);
+  /* See if the script could be generated. */
+  if (ed_diff == NULL) return NULL;
+
+  /* See that the script actually produces what we want. */
+  smartlist_t *ed_cons2 = apply_ed_diff(cons1, ed_diff);
+  int cons2_eq = smartlist_strings_eq(cons2, ed_cons2);
+  SMARTLIST_FOREACH(ed_cons2, char*, line, tor_free(line));
+  smartlist_free(ed_cons2);
+  if (!cons2_eq) return NULL;
+
+  /* Create the resulting consensus diff. */
+  smartlist_t *result = smartlist_new();
+  /* TODO: Need to figure out the actual hashes or have them passed as
+   * arguments. */
+  const char *cons1_hash = "foo";
+  const char *cons2_hash = "bar";
+  smartlist_add_asprintf(result,
+      "network-status-diff-version 1\n"
+      "hash %s %s",
+      cons1_hash, cons2_hash);
+  smartlist_add_all(result, ed_diff);
+  smartlist_free(ed_diff);
+  return result;
+}
+
 /** Apply the consensus diff to the given consensus and return a new
  * consensus, also as a line-based smartlist. Will return NULL if the diff
  * could not be applied. Neither the consensus nor the diff are modified in
@@ -614,7 +636,5 @@ consdiff_apply_diff(smartlist_t *cons1, smartlist_t *diff)
   smartlist_t *cons2 = apply_ed_diff(cons1, diff);
   return cons2;
 }
-
-// vim: et sw=2
 
 // vim: et sw=2
