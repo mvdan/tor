@@ -281,7 +281,7 @@ next_router(smartlist_t *cons, int cur)
  * different lengths. Comparison ends when the first non-base64 char is found.
  */
 static int
-hashcmp(const char *hash1, const char *hash2)
+base64cmp(const char *hash1, const char *hash2)
 {
   /* NULL is always lower, useful for last_hash which starts at NULL. */
   if (hash1 == NULL && hash2 == NULL) return 0;
@@ -352,7 +352,7 @@ gen_ed_diff(smartlist_t *cons1, smartlist_t *cons2)
         last_hash1 = hash1;
         hash1 = get_id_hash(smartlist_get(cons1, i1));
         /* Identity hashes must always increase. */
-        if (hashcmp(hash1, last_hash1) <= 0) goto error_cleanup;
+        if (base64cmp(hash1, last_hash1) <= 0) goto error_cleanup;
       }
     }
 
@@ -362,7 +362,7 @@ gen_ed_diff(smartlist_t *cons1, smartlist_t *cons2)
         last_hash2 = hash2;
         hash2 = get_id_hash(smartlist_get(cons2, i2));
         /* Identity hashes must always increase. */
-        if (hashcmp(hash2, last_hash2) <= 0) goto error_cleanup;
+        if (base64cmp(hash2, last_hash2) <= 0) goto error_cleanup;
       }
     }
 
@@ -378,7 +378,7 @@ gen_ed_diff(smartlist_t *cons1, smartlist_t *cons2)
        * will always be incremented, thus assuring that the loop must end
        * after a finite number of iterations.
        */
-      int cmp = hashcmp(hash1, hash2);
+      int cmp = base64cmp(hash1, hash2);
       while (cmp != 0) {
         if (i1 < len1 && cmp < 0) {
           i1 = next_router(cons1, i1);
@@ -391,7 +391,7 @@ gen_ed_diff(smartlist_t *cons1, smartlist_t *cons2)
           last_hash1 = hash1;
           hash1 = get_id_hash(smartlist_get(cons1, i1));
           /* Identity hashes must always increase. */
-          if (hashcmp(hash1, last_hash1) <= 0) goto error_cleanup;
+          if (base64cmp(hash1, last_hash1) <= 0) goto error_cleanup;
         }
         if (i2 < len2 && cmp > 0) {
           i2 = next_router(cons2, i2);
@@ -404,9 +404,9 @@ gen_ed_diff(smartlist_t *cons1, smartlist_t *cons2)
           last_hash2 = hash2;
           hash2 = get_id_hash(smartlist_get(cons2, i2));
           /* Identity hashes must always increase. */
-          if (hashcmp(hash2, last_hash2) <= 0) goto error_cleanup;
+          if (base64cmp(hash2, last_hash2) <= 0) goto error_cleanup;
         }
-        cmp = hashcmp(hash1, hash2);
+        cmp = base64cmp(hash1, hash2);
       }
     }
 
