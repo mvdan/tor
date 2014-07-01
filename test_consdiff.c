@@ -343,33 +343,33 @@ test_consdiff_next_router(void)
 }
 
 static void
-test_consdiff_hashcmp(void)
+test_consdiff_base64cmp(void)
 {
   /* NULL arguments. */
-  test_eq(0, hashcmp(NULL, NULL));
-  test_eq(-1, hashcmp(NULL, "foo"));
-  test_eq(1, hashcmp("bar", NULL));
+  test_eq(0, base64cmp(NULL, NULL));
+  test_eq(-1, base64cmp(NULL, "foo"));
+  test_eq(1, base64cmp("bar", NULL));
 
   /* Nil base64 values. */
-  test_eq(0, hashcmp("", ""));
-  test_eq(0, hashcmp("_", "&"));
+  test_eq(0, base64cmp("", ""));
+  test_eq(0, base64cmp("_", "&"));
 
   /* Exact same valid strings. */
-  test_eq(0, hashcmp("abcABC/+", "abcABC/+"));
+  test_eq(0, base64cmp("abcABC/+", "abcABC/+"));
   /* Both end with an invalid base64 char other than '\0'. */
-  test_eq(0, hashcmp("abcABC/+ ", "abcABC/+ "));
+  test_eq(0, base64cmp("abcABC/+ ", "abcABC/+ "));
   /* Only one ends with an invalid base64 char other than '\0'. */
-  test_eq(0, hashcmp("abcABC/+ ", "abcABC/+"));
+  test_eq(0, base64cmp("abcABC/+ ", "abcABC/+"));
 
   /* Comparisons that would return differently with strcmp(). */
   test_eq(-1, strcmp("/foo", "Afoo"));
-  test_eq(1, hashcmp("/foo", "Afoo"));
+  test_eq(1, base64cmp("/foo", "Afoo"));
   test_eq(1, strcmp("Afoo", "0foo"));
-  test_eq(-1, hashcmp("Afoo", "0foo"));
+  test_eq(-1, base64cmp("Afoo", "0foo"));
 
   /* Comparisons that would return the same as with strcmp(). */
   test_eq(1, strcmp("afoo", "Afoo"));
-  test_eq(1, hashcmp("afoo", "Afoo"));
+  test_eq(1, base64cmp("afoo", "Afoo"));
 
  done:
   ;
@@ -688,7 +688,7 @@ main() {
   test_consdiff_get_id_hash();
   test_consdiff_is_valid_router_entry();
   test_consdiff_next_router();
-  test_consdiff_hashcmp();
+  test_consdiff_base64cmp();
   test_consdiff_gen_ed_diff();
   test_consdiff_apply_ed_diff();
   return 0;
