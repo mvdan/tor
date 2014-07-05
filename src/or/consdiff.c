@@ -3,6 +3,8 @@
 #include <string.h>
 
 #include "container.h"
+#include "crypto.h"
+#include "util.h"
 #include "consdiff.h"
 
 /** Create (allocate) a new slice from a smartlist. Assumes that the offset
@@ -312,6 +314,23 @@ base64cmp(const char *hash1, const char *hash2)
   }
 }
 
+/** Given a list of strings in <b>lst</b>, set the SHA256 digest at
+ * <b>digest_out</b> to the hash of the concatenation of those strings, plus
+ * the optional string <b>end</b> to be added after each string. */
+static void
+crypto_digest_smartlist_ends(char *digest_out, const smartlist_t *lst,
+                             const char *end)
+{
+  crypto_digest_t *d = crypto_digest256_new(DIGEST_SHA256);
+  SMARTLIST_FOREACH_BEGIN(lst, const char *, cp) {
+    crypto_digest_add_bytes(d, cp, strlen(cp));
+    if (end)
+      crypto_digest_add_bytes(d, end, strlen(end));
+  } SMARTLIST_FOREACH_END(cp);
+  crypto_digest_get_digest(d, digest_out, DIGEST256_LEN);
+  crypto_digest_free(d);
+}
+
 /** Generate an ed diff as a smartlist from two consensuses, also given as
  * smartlists. Will return NULL if the diff could not be generated, which can
  * happen if any lines the script had to add matched "." or if the routers
@@ -610,16 +629,22 @@ consdiff_gen_diff(smartlist_t *cons1, smartlist_t *cons2)
   smartlist_free(ed_cons2);
   if (!cons2_eq) return NULL;
 
+  /* Calculate the digests. */
+  char cons1_hash[DIGEST256_LEN];
+  char cons2_hash[DIGEST256_LEN];
+  crypto_digest_smartlist_ends(cons1_hash, cons1, "\n");
+  crypto_digest_smartlist_ends(cons2_hash, cons2, "\n");
+  char cons1_hash_hex[HEX_DIGEST256_LEN+1];
+  char cons2_hash_hex[HEX_DIGEST256_LEN+1];
+  base16_encode(cons1_hash_hex, HEX_DIGEST256_LEN+1, cons1_hash, DIGEST256_LEN);
+  base16_encode(cons2_hash_hex, HEX_DIGEST256_LEN+1, cons2_hash, DIGEST256_LEN);
+
   /* Create the resulting consensus diff. */
   smartlist_t *result = smartlist_new();
-  /* TODO: Need to figure out the actual hashes or have them passed as
-   * arguments. */
-  const char *cons1_hash = "foo";
-  const char *cons2_hash = "bar";
   smartlist_add_asprintf(result,
       "network-status-diff-version 1\n"
       "hash %s %s",
-      cons1_hash, cons2_hash);
+      cons1_hash_hex, cons2_hash_hex);
   smartlist_add_all(result, ed_diff);
   smartlist_free(ed_diff);
   return result;
