@@ -664,8 +664,6 @@ test_consdiff_apply_ed_diff(void)
   test_streq("X", smartlist_get(cons2, 4));
   test_streq("E", smartlist_get(cons2, 5));
 
-  /* TODO: real use-cases with consensuses. */
-
  done:
   if (cons1) SMARTLIST_FOREACH(cons1, char*, line, tor_free(line));
   if (cons2) SMARTLIST_FOREACH(cons2, char*, line, tor_free(line));
@@ -715,6 +713,59 @@ test_consdiff_crypto_digest_smartlist_ends(void)
  done:
   if (sl) SMARTLIST_FOREACH(sl, char*, line, tor_free(line));
   smartlist_free(sl);
+}
+
+static void
+test_consdiff_gen_diff(void)
+{
+  smartlist_t *cons1, *cons2, *diff;
+  cons1 = smartlist_new();
+  cons2 = smartlist_new();
+
+  /* Identity hashes are not sorted properly, return NULL.
+   * Already tested in gen_ed_diff, but see that a NULL ed diff also makes
+   * gen_diff return NULL. */
+  smartlist_add(cons1, "r name bbbbbbbbbbbbbbbbbbbbbbbbbbb etc");
+  smartlist_add(cons1, "foo");
+  smartlist_add(cons1, "r name aaaaaaaaaaaaaaaaaaaaaaaaaaa etc");
+  smartlist_add(cons1, "bar");
+
+  smartlist_add(cons2, "r name aaaaaaaaaaaaaaaaaaaaaaaaaaa etc");
+  smartlist_add(cons2, "foo");
+  smartlist_add(cons2, "r name ccccccccccccccccccccccccccc etc");
+  smartlist_add(cons2, "bar");
+
+  diff = consdiff_gen_diff(cons1, cons2);
+  test_eq_ptr(NULL, diff);
+
+  /* Test 'a', 'c' and 'd' together. See that it is done in reverse order.
+   * As tested in gen_ed_diff, but also check the header. */
+  smartlist_clear(cons1);
+  smartlist_clear(cons2);
+  smartlist_split_string(cons1, "A:B:C:D:E", ":", 0, 0);
+  smartlist_split_string(cons2, "A:C:O:E:U", ":", 0, 0);
+  diff = consdiff_gen_diff(cons1, cons2);
+  test_neq_ptr(NULL, diff);
+  test_eq(9, smartlist_len(diff));
+  test_streq("network-status-diff-version 1", smartlist_get(diff, 0));
+  /*test_streq("hash foo bar", smartlist_get(diff, 1));*/
+  test_streq("5a", smartlist_get(diff, 2));
+  test_streq("U", smartlist_get(diff, 3));
+  test_streq(".", smartlist_get(diff, 4));
+  test_streq("4c", smartlist_get(diff, 5));
+  test_streq("O", smartlist_get(diff, 6));
+  test_streq(".", smartlist_get(diff, 7));
+  test_streq("2d", smartlist_get(diff, 8));
+
+  /* TODO: small real use-cases, i.e. consensuses. */
+
+ done:
+  if (cons1) SMARTLIST_FOREACH(cons1, char*, line, tor_free(line));
+  if (cons2) SMARTLIST_FOREACH(cons2, char*, line, tor_free(line));
+  smartlist_free(cons1);
+  smartlist_free(cons2);
+  if (diff) SMARTLIST_FOREACH(diff, char*, line, tor_free(line));
+  smartlist_free(diff);
 }
 
 struct testcase_t consdiff_tests[] = {
