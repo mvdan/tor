@@ -719,6 +719,8 @@ consdiff_apply_diff(smartlist_t *cons1, smartlist_t *diff)
   if (memcmp(cons2_hash, e_cons2_hash, DIGEST256_LEN*sizeof(char)) != 0)
     goto error_cleanup;
 
+  SMARTLIST_FOREACH(hash_words, char *, cp, tor_free(cp));
+  smartlist_free(hash_words);
   return cons2;
 
 error_cleanup:

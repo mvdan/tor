@@ -837,7 +837,9 @@ test_consdiff_apply_diff(void)
   smartlist_clear(diff);
   smartlist_add(diff, "network-status-diff-version 1");
   smartlist_add(diff, "hash"
+      /* sha256 of "". */
       " e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      /* bogus sha256. */
       " 3333333333333333333333333333333333333333333333333333333333333333");
   smartlist_add(diff, "foobar");
   cons2 = consdiff_apply_diff(cons1, diff);
@@ -847,7 +849,9 @@ test_consdiff_apply_diff(void)
   smartlist_clear(diff);
   smartlist_add(diff, "network-status-diff-version 1");
   smartlist_add(diff, "hash"
+      /* sha256 of "". */
       " e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      /* bogus sha256. */
       " 3333333333333333333333333333333333333333333333333333333333333333");
   smartlist_add(diff, "0a");
   smartlist_add(diff, "foo");
@@ -855,11 +859,42 @@ test_consdiff_apply_diff(void)
   cons2 = consdiff_apply_diff(cons1, diff);
   test_eq_ptr(NULL, cons2);
 
+  /* Very simple test, only to see that nothing errors. */
+  smartlist_clear(diff);
+  smartlist_add(diff, "network-status-diff-version 1");
+  smartlist_add(diff, "hash"
+      /* sha256 of "". */
+      " e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      /* sha256 of "foo\n". */
+      " b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd32812f4850b878ae4944c");
+  smartlist_add(diff, "0a");
+  smartlist_add(diff, "foo");
+  smartlist_add(diff, ".");
+  cons2 = consdiff_apply_diff(cons1, diff);
+  test_neq_ptr(NULL, cons2);
+  SMARTLIST_FOREACH(cons2, char *, cp, tor_free(cp));
+  smartlist_free(cons2);
+
+  /* Check that capital letters in base16-encoded digests work too. */
+  smartlist_clear(diff);
+  smartlist_add(diff, "network-status-diff-version 1");
+  smartlist_add(diff, "hash"
+      /* sha256 of "". */
+      " E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+      /* sha256 of "foo\n". */
+      " B5BB9D8014A0F9B1D61E21E796D78DCCDF1352F23CD32812F4850B878AE4944C");
+  smartlist_add(diff, "0a");
+  smartlist_add(diff, "foo");
+  smartlist_add(diff, ".");
+  cons2 = consdiff_apply_diff(cons1, diff);
+  test_neq_ptr(NULL, cons2);
+  SMARTLIST_FOREACH(cons2, char *, cp, tor_free(cp));
+  smartlist_free(cons2);
+
   smartlist_clear(diff);
 
  done:
   smartlist_free(cons1);
-  smartlist_free(cons2);
   smartlist_free(diff);
 }
 
