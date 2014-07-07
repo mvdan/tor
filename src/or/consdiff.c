@@ -543,7 +543,7 @@ apply_ed_diff(smartlist_t *cons1, smartlist_t *diff)
     }
 
     /* The diff is not in reverse order. */
-    if (end >= j) goto error_cleanup;
+    if (end > j) goto error_cleanup;
 
     /* Action is longer than one char. */
     if (*(endptr2+1) != '\0') goto error_cleanup;
@@ -628,6 +628,7 @@ consdiff_gen_diff(smartlist_t *cons1, smartlist_t *cons2)
 
   /* See that the script actually produces what we want. */
   smartlist_t *ed_cons2 = apply_ed_diff(cons1, ed_diff);
+  if (!ed_cons2) return NULL;
   int cons2_eq = smartlist_strings_eq(cons2, ed_cons2);
   SMARTLIST_FOREACH(ed_cons2, char*, line, tor_free(line));
   smartlist_free(ed_cons2);
