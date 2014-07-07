@@ -127,7 +127,7 @@ trim_slices(smartlist_slice_t *slice1, smartlist_slice_t *slice2)
  */
 static void
 set_changed(bitarray_t *changed1, bitarray_t *changed2,
-    smartlist_slice_t *slice1, smartlist_slice_t *slice2)
+            smartlist_slice_t *slice1, smartlist_slice_t *slice2)
 {
   tor_assert(slice1->len == 0 || slice1->len == 1);
   int toskip = -1;
@@ -152,7 +152,7 @@ set_changed(bitarray_t *changed1, bitarray_t *changed2,
  */
 static void
 calc_changes(smartlist_slice_t *slice1, smartlist_slice_t *slice2,
-    bitarray_t *changed1, bitarray_t *changed2)
+             bitarray_t *changed1, bitarray_t *changed2)
 {
   trim_slices(slice1, slice2);
 
