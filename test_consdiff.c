@@ -811,14 +811,55 @@ test_consdiff_apply_diff(void)
   cons2 = consdiff_apply_diff(cons1, diff);
   test_eq_ptr(NULL, cons2);
 
+  /* base16 sha256 digests contain non-base16 characters. */
+  smartlist_clear(diff);
+  smartlist_add(diff, "network-status-diff-version 1");
+  smartlist_add(diff, "hash"
+      " ????????????????????????????????????????????????????????????????"
+      " ----------------------------------------------------------------");
+  smartlist_add(diff, "0d");
+  cons2 = consdiff_apply_diff(cons1, diff);
+  test_eq_ptr(NULL, cons2);
+
+  /* The digest of the starting consensus in the diff is not correct. */
+  smartlist_clear(diff);
+  smartlist_add(diff, "network-status-diff-version 1");
+  smartlist_add(diff, "hash"
+      " 2222222222222222222222222222222222222222222222222222222222222222"
+      " 3333333333333333333333333333333333333333333333333333333333333333");
+  smartlist_add(diff, "0d");
+  cons2 = consdiff_apply_diff(cons1, diff);
+  test_eq_ptr(NULL, cons2);
+
+  /* Invalid ed diff.
+   * As tested in apply_ed_diff, but check that apply_diff does return NULL if
+   * the ed diff can't be applied. */
+  smartlist_clear(diff);
+  smartlist_add(diff, "network-status-diff-version 1");
+  smartlist_add(diff, "hash"
+      " e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      " 3333333333333333333333333333333333333333333333333333333333333333");
+  smartlist_add(diff, "foobar");
+  cons2 = consdiff_apply_diff(cons1, diff);
+  test_eq_ptr(NULL, cons2);
+
+  /* Resulting consensus doesn't match its digest as found in the diff. */
+  smartlist_clear(diff);
+  smartlist_add(diff, "network-status-diff-version 1");
+  smartlist_add(diff, "hash"
+      " e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      " 3333333333333333333333333333333333333333333333333333333333333333");
+  smartlist_add(diff, "0a");
+  smartlist_add(diff, "foo");
+  smartlist_add(diff, ".");
+  cons2 = consdiff_apply_diff(cons1, diff);
+  test_eq_ptr(NULL, cons2);
+
   smartlist_clear(diff);
 
  done:
-  if (cons1) SMARTLIST_FOREACH(cons1, char*, line, tor_free(line));
-  if (cons2) SMARTLIST_FOREACH(cons2, char*, line, tor_free(line));
   smartlist_free(cons1);
   smartlist_free(cons2);
-  if (diff) SMARTLIST_FOREACH(diff, char*, line, tor_free(line));
   smartlist_free(diff);
 }
 
