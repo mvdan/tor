@@ -660,7 +660,61 @@ consdiff_gen_diff(smartlist_t *cons1, smartlist_t *cons2)
 smartlist_t *
 consdiff_apply_diff(smartlist_t *cons1, smartlist_t *diff)
 {
-  smartlist_t *cons2 = apply_ed_diff(cons1, diff);
+  if (smartlist_len(diff) < 3) return NULL; /* No ed diff present. */
+
+  /* Check that it's the format and version we know. */
+  const char *format = smartlist_get(diff, 0);
+  if (strcmp(format, "network-status-diff-version 1")) return NULL;
+
+  /* Grab the SHA256 base16 hashes. */
+  smartlist_t *hash_words = smartlist_new();
+  smartlist_split_string(hash_words, smartlist_get(diff, 1), " ", 0, 0);
+
+  /* There have to be exactly three tokens. */
+  if (smartlist_len(hash_words) != 3) return NULL;
+  /* Line must start with the word "hash". */
+  if (strcmp(smartlist_get(hash_words, 0), "hash")) return NULL;
+
+  /* Expected hashes as found in the consensus diff header. They must be of
+   * length HEX_DIGEST256_LEN, normally 64 hexadecimal characters. */
+  char *e_cons1_hash_hex = smartlist_get(hash_words, 1);
+  if (strlen(e_cons1_hash_hex) != HEX_DIGEST256_LEN) return NULL;
+  char *e_cons2_hash_hex = smartlist_get(hash_words, 2);
+  if (strlen(e_cons2_hash_hex) != HEX_DIGEST256_LEN) return NULL;
+
+  /* If any of the decodings fail, error to make sure that the hashes are
+   * proper base16-encoded SHA256 digests. */
+  char e_cons1_hash[DIGEST256_LEN];
+  char e_cons2_hash[DIGEST256_LEN];
+  if (base16_decode(e_cons1_hash, DIGEST256_LEN,
+      e_cons1_hash_hex, HEX_DIGEST256_LEN) != 0) return NULL;
+  if (base16_decode(e_cons2_hash, DIGEST256_LEN,
+      e_cons2_hash_hex, HEX_DIGEST256_LEN) != 0) return NULL;
+
+  /* See that the consensus that was given to us matches its hash. */
+  char cons1_hash[DIGEST256_LEN];
+  crypto_digest_smartlist_ends(cons1_hash, cons1, "\n");
+  char cons1_hash_hex[HEX_DIGEST256_LEN+1];
+  base16_encode(cons1_hash_hex, HEX_DIGEST256_LEN+1, cons1_hash, DIGEST256_LEN);
+  if (memcmp(cons1_hash, e_cons1_hash, DIGEST256_LEN*sizeof(char)) != 0)
+    return NULL;
+
+  /* Grab the ed diff and calculate the resulting consensus. */
+  smartlist_t ed_diff;
+  /* To avoid copying memory or iterating over all the elements, make a
+   * read-only smartlist without the two header lines. */
+  ed_diff.list = diff->list+2;
+  ed_diff.num_used = diff->num_used-2;
+  ed_diff.capacity = diff->capacity-2;
+  smartlist_t *cons2 = apply_ed_diff(cons1, &ed_diff);
+  if (cons2 == NULL) return NULL; /* ed diff could not be applied. */
+
+  char cons2_hash[DIGEST256_LEN];
+  crypto_digest_smartlist_ends(cons2_hash, cons2, "\n");
+  /* The resulting consensus doesn't match its hash. */
+  if (memcmp(cons2_hash, e_cons2_hash, DIGEST256_LEN*sizeof(char)) != 0)
+    return NULL;
+
   return cons2;
 }
 
