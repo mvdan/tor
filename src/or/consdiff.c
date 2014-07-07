@@ -703,13 +703,14 @@ consdiff_apply_diff(smartlist_t *cons1, smartlist_t *diff)
     return NULL;
 
   /* Grab the ed diff and calculate the resulting consensus. */
-  smartlist_t ed_diff;
   /* To avoid copying memory or iterating over all the elements, make a
    * read-only smartlist without the two header lines. */
-  ed_diff.list = diff->list+2;
-  ed_diff.num_used = diff->num_used-2;
-  ed_diff.capacity = diff->capacity-2;
-  smartlist_t *cons2 = apply_ed_diff(cons1, &ed_diff);
+  smartlist_t *ed_diff = tor_malloc(sizeof(smartlist_t));
+  ed_diff->list = diff->list+2;
+  ed_diff->num_used = diff->num_used-2;
+  ed_diff->capacity = diff->capacity-2;
+  smartlist_t *cons2 = apply_ed_diff(cons1, ed_diff);
+  tor_free(ed_diff);
   if (cons2 == NULL) return NULL; /* ed diff could not be applied. */
 
   char cons2_hash[DIGEST256_LEN];
