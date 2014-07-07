@@ -691,6 +691,9 @@ consdiff_apply_diff(smartlist_t *cons1, smartlist_t *diff)
   if (base16_decode(e_cons2_hash, DIGEST256_LEN,
       e_cons2_hash_hex, HEX_DIGEST256_LEN) != 0) return NULL;
 
+  SMARTLIST_FOREACH(hash_words, char *, cp, tor_free(cp));
+  smartlist_free(hash_words);
+
   /* See that the consensus that was given to us matches its hash. */
   char cons1_hash[DIGEST256_LEN];
   crypto_digest_smartlist_ends(cons1_hash, cons1, "\n");
