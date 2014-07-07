@@ -8,7 +8,8 @@
 #include "consdiff.h"
 
 /** Create (allocate) a new slice from a smartlist. Assumes that the offset
- * and the consequent length are in the bounds of the smartlist.
+ * and the consequent length are in the bounds of the smartlist. If len is -1,
+ * the slice is to reach the end of the smartlist.
  */
 static smartlist_slice_t *
 smartlist_slice(smartlist_t *list, int offset, int len)
@@ -17,6 +18,9 @@ smartlist_slice(smartlist_t *list, int offset, int len)
   tor_assert(offset >= 0);
   /* If we are making a slice out of an empty list, ignore the 0<0 failure. */
   tor_assert(offset < list_len || list_len == 0);
+
+  if (len == -1)
+    len = smartlist_len(list) - offset;
   tor_assert(len >= 0 && offset+len <= list_len);
 
   smartlist_slice_t *slice = tor_malloc(sizeof(smartlist_slice_t));
