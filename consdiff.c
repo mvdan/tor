@@ -260,7 +260,7 @@ get_id_hash(const char *r_line)
 static int
 is_valid_router_entry(const char *line)
 {
-  if (strncmp("r ", line, 2) != 0) return 0;
+  if (strcmpstart(line, "r ") != 0) return 0;
   return (get_id_hash(line) != NULL);
 }
 
