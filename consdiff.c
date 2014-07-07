@@ -662,6 +662,7 @@ smartlist_t *
 consdiff_apply_diff(smartlist_t *cons1, smartlist_t *diff)
 {
   smartlist_t *hash_words = NULL;
+  smartlist_t *cons2 = NULL;
   if (smartlist_len(diff) < 3) goto error_cleanup; /* No ed diff present. */
 
   /* Check that it's the format and version we know. */
@@ -693,9 +694,6 @@ consdiff_apply_diff(smartlist_t *cons1, smartlist_t *diff)
   if (base16_decode(e_cons2_hash, DIGEST256_LEN,
       e_cons2_hash_hex, HEX_DIGEST256_LEN) != 0) goto error_cleanup;
 
-  SMARTLIST_FOREACH(hash_words, char *, cp, tor_free(cp));
-  smartlist_free(hash_words);
-
   /* See that the consensus that was given to us matches its hash. */
   char cons1_hash[DIGEST256_LEN];
   crypto_digest_smartlist_ends(cons1_hash, cons1, "\n");
@@ -711,7 +709,7 @@ consdiff_apply_diff(smartlist_t *cons1, smartlist_t *diff)
   ed_diff->list = diff->list+2;
   ed_diff->num_used = diff->num_used-2;
   ed_diff->capacity = diff->capacity-2;
-  smartlist_t *cons2 = apply_ed_diff(cons1, ed_diff);
+  cons2 = apply_ed_diff(cons1, ed_diff);
   tor_free(ed_diff);
   if (cons2 == NULL) goto error_cleanup; /* ed diff could not be applied. */
 
@@ -728,6 +726,10 @@ error_cleanup:
   if (hash_words) {
     SMARTLIST_FOREACH(hash_words, char *, cp, tor_free(cp));
     smartlist_free(hash_words);
+  }
+  if (cons2) {
+    SMARTLIST_FOREACH(cons2, char *, cp, tor_free(cp));
+    smartlist_free(cons2);
   }
 
   return NULL;
