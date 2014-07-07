@@ -645,10 +645,8 @@ consdiff_gen_diff(smartlist_t *cons1, smartlist_t *cons2)
 
   /* Create the resulting consensus diff. */
   smartlist_t *result = smartlist_new();
-  smartlist_add_asprintf(result,
-      "network-status-diff-version 1\n"
-      "hash %s %s",
-      cons1_hash_hex, cons2_hash_hex);
+  smartlist_add_asprintf(result, "network-status-diff-version 1");
+  smartlist_add_asprintf(result, "hash %s %s", cons1_hash_hex, cons2_hash_hex);
   smartlist_add_all(result, ed_diff);
   smartlist_free(ed_diff);
   return result;
