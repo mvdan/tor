@@ -769,6 +769,59 @@ test_consdiff_gen_diff(void)
   smartlist_free(diff);
 }
 
+static void
+test_consdiff_apply_diff(void)
+{
+  smartlist_t *cons1, *cons2, *diff;
+  cons1 = smartlist_new();
+  diff = smartlist_new();
+
+  /* diff doesn't have enough lines. */
+  cons2 = consdiff_apply_diff(cons1, diff);
+  test_eq_ptr(NULL, cons2);
+
+  /* first line doesn't match format-version string. */
+  smartlist_add(diff, "foo-bar");
+  smartlist_add(diff, "header-line");
+  smartlist_add(diff, "0d");
+  cons2 = consdiff_apply_diff(cons1, diff);
+  test_eq_ptr(NULL, cons2);
+
+  /* The first word of the second header line is not "hash". */
+  smartlist_clear(diff);
+  smartlist_add(diff, "network-status-diff-version 1");
+  smartlist_add(diff, "word a b");
+  smartlist_add(diff, "0d");
+  cons2 = consdiff_apply_diff(cons1, diff);
+  test_eq_ptr(NULL, cons2);
+
+  /* Wrong number of words after "hash". */
+  smartlist_clear(diff);
+  smartlist_add(diff, "network-status-diff-version 1");
+  smartlist_add(diff, "hash a b c");
+  smartlist_add(diff, "0d");
+  cons2 = consdiff_apply_diff(cons1, diff);
+  test_eq_ptr(NULL, cons2);
+
+  /* base16 sha256 digests do not have the expected length. */
+  smartlist_clear(diff);
+  smartlist_add(diff, "network-status-diff-version 1");
+  smartlist_add(diff, "hash aaa bbb");
+  smartlist_add(diff, "0d");
+  cons2 = consdiff_apply_diff(cons1, diff);
+  test_eq_ptr(NULL, cons2);
+
+  smartlist_clear(diff);
+
+ done:
+  if (cons1) SMARTLIST_FOREACH(cons1, char*, line, tor_free(line));
+  if (cons2) SMARTLIST_FOREACH(cons2, char*, line, tor_free(line));
+  smartlist_free(cons1);
+  smartlist_free(cons2);
+  if (diff) SMARTLIST_FOREACH(diff, char*, line, tor_free(line));
+  smartlist_free(diff);
+}
+
 /** For now, run all tests manually. */
 int
 main() {
@@ -786,6 +839,7 @@ main() {
   test_consdiff_apply_ed_diff();
   test_consdiff_crypto_digest_smartlist_ends();
   test_consdiff_gen_diff();
+  test_consdiff_apply_diff();
   return 0;
 }
 
