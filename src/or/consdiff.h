@@ -1,3 +1,10 @@
+/* Copyright (c) 2014, Daniel Martí
+ * Copyright (c) 2014, The Tor Project, Inc. */
+/* See LICENSE for licensing information */
+
+#ifndef TOR_CONSDIFF_H
+#define TOR_CONSDIFF_H
+
 /** Data structure to define a slice of a smarltist. */
 typedef struct {
   /** Smartlist that this slice is made from. */
@@ -10,3 +17,6 @@ typedef struct {
 
 smartlist_t *consdiff_gen_diff(smartlist_t *cons1, smartlist_t *cons2);
 smartlist_t *consdiff_apply_diff(smartlist_t *cons1, smartlist_t *diff);
+
+#endif
+
