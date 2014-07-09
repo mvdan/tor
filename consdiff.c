@@ -1,3 +1,13 @@
+/* Copyright (c) 2014, Daniel Martí
+ * Copyright (c) 2014, The Tor Project, Inc. */
+/* See LICENSE for licensing information */
+
+/**
+ * \file consdiff.c
+ * \brief Consensus diff implementation, including both the generation and the
+ * application of diffs in a minimal ed format.
+ **/
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
