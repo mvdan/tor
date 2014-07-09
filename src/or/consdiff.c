@@ -445,9 +445,18 @@ gen_ed_diff(smartlist_t *cons1, smartlist_t *cons2)
 
     /* Make slices out of these chunks (up to the common router entry) and
      * calculate the changes for them.
+     * Error if any of the two slices are longer than 10K lines. That should
+     * never happen with any pair of real consensuses. Feeding more than 10K
+     * lines to calc_changes would be very slow anyway.
      */
-    smartlist_slice_t *cons1_sl = smartlist_slice(cons1, start1, i1-start1);
-    smartlist_slice_t *cons2_sl = smartlist_slice(cons2, start2, i2-start2);
+    int len_sl1 = i1-start1;
+    int len_sl2 = i2-start2;
+#define MAX_LINE_COUNT (10000)
+    if (len_sl1 > MAX_LINE_COUNT || len_sl2 > MAX_LINE_COUNT)
+      goto error_cleanup;
+
+    smartlist_slice_t *cons1_sl = smartlist_slice(cons1, start1, len_sl1);
+    smartlist_slice_t *cons2_sl = smartlist_slice(cons2, start2, len_sl2);
     calc_changes(cons1_sl, cons2_sl, changed1, changed2);
     tor_free(cons1_sl);
     tor_free(cons2_sl);

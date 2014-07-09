@@ -424,6 +424,18 @@ test_consdiff_gen_ed_diff(void)
   diff = gen_ed_diff(cons1, cons2);
   test_eq_ptr(NULL, diff);
 
+#define MAX_LINE_COUNT (10000)
+  /* Too many lines to be fed to the quadratic-time function. */
+  smartlist_clear(cons1);
+  smartlist_clear(cons2);
+
+  int i;
+  for (i=0; i < MAX_LINE_COUNT; ++i) smartlist_add(cons1, "a");
+  for (i=0; i < MAX_LINE_COUNT; ++i) smartlist_add(cons1, "b");
+
+  diff = gen_ed_diff(cons1, cons2);
+  test_eq_ptr(NULL, diff);
+
   /* We have dot lines, but they don't interfere with the script format. */
   smartlist_clear(cons1);
   smartlist_clear(cons2);
