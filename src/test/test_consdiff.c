@@ -95,7 +95,7 @@ test_consdiff_trim_slices(void)
   smartlist_split_string(sl2, "a:c:c:c:d", ":", 0, 0);
   smartlist_split_string(sl3, "a:b:b:b:a", ":", 0, 0);
   smartlist_split_string(sl4, "c:b:b:b:c", ":", 0, 0);
-  
+
   smartlist_slice_t *sls1 = smartlist_slice(sl1, 0, smartlist_len(sl1));
   smartlist_slice_t *sls2 = smartlist_slice(sl2, 0, smartlist_len(sl2));
   smartlist_slice_t *sls3 = smartlist_slice(sl3, 0, smartlist_len(sl3));
@@ -292,7 +292,8 @@ test_consdiff_get_id_hash(void)
   /* The hash is too short. */
   test_eq_ptr(NULL, get_id_hash("r name hash etc"));
   /* The hash contains characters that are not base64. */
-  test_eq_ptr(NULL, get_id_hash("r name hash_longer_than_27_chars_but_isnt_base64 etc"));
+  test_eq_ptr(NULL, get_id_hash(
+        "r name hash_longer_than_27_chars_but_isnt_base64 etc"));
 
   char *line = "r name hash+longer+than+27+chars+and+valid+base64 etc";
   char *e_hash = line+7;
@@ -313,9 +314,10 @@ test_consdiff_is_valid_router_entry(void)
 
   test_eq(0, is_valid_router_entry("r name"));
   test_eq(0, is_valid_router_entry("r name hash etc"));
-  test_eq(0, is_valid_router_entry("r name hash_longer_than_27_chars_but_isnt_base64 etc"));
-
-  test_eq(1, is_valid_router_entry("r name hash+longer+than+27+chars+and+valid+base64 etc"));
+  test_eq(0, is_valid_router_entry(
+        "r name hash_longer_than_27_chars_but_isnt_base64 etc"));
+  test_eq(1, is_valid_router_entry(
+        "r name hash+longer+than+27+chars+and+valid+base64 etc"));
 
  done:
   ;
@@ -936,3 +938,4 @@ struct testcase_t consdiff_tests[] = {
   CONSDIFF_LEGACY(apply_diff),
   END_OF_TESTCASES
 };
+
