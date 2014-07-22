@@ -91,7 +91,6 @@ lcs_lens(smartlist_slice_t *slice1, smartlist_slice_t *slice2, int direction)
       /* If not, see what lcs parent path is longer. */
       else
         result[j + 1] = MAX(result[j], prev[j + 1]);
-
     }
   }
   tor_free(prev);
@@ -127,7 +126,6 @@ trim_slices(smartlist_slice_t *slice1, smartlist_slice_t *slice2)
     i1--; slice1->len--;
     i2--; slice2->len--;
   }
-
 }
 
 /** Helper: Set all the appropriate changed booleans to true. The first slice
@@ -312,15 +310,20 @@ base64cmp(const char *hash1, const char *hash2)
     uint8_t bv = base64_compare_table[*b];
     if (av == X) {
       if (bv == X)
-        return 0; /* Both ended with exactly the same characters. */
+        /* Both ended with exactly the same characters. */
+        return 0;
       else
-        return -1; /* hash2 goes on longer than hash1 and thus hash1 is lower. */
+        /* hash2 goes on longer than hash1 and thus hash1 is lower. */
+        return -1;
     } else if (bv == X) {
-      return 1; /* hash1 goes on longer than hash2 and thus hash1 is greater. */
+      /* hash1 goes on longer than hash2 and thus hash1 is greater. */
+      return 1;
     } else if (av < bv) {
-      return -1; /* The first difference shows that hash1 is lower. */
+      /* The first difference shows that hash1 is lower. */
+      return -1;
     } else if (av > bv) {
-      return 1; /* The first difference shows that hash1 is greater. */
+      /* The first difference shows that hash1 is greater. */
+      return 1;
     } else {
       ++a;
       ++b;
@@ -514,7 +517,7 @@ gen_ed_diff(smartlist_t *cons1, smartlist_t *cons2)
 
   return result;
 
-error_cleanup:
+  error_cleanup:
 
   bitarray_free(changed1);
   bitarray_free(changed2);
@@ -612,7 +615,6 @@ apply_ed_diff(smartlist_t *cons1, smartlist_t *diff)
         smartlist_add(cons2, tor_strdup(added_line));
       }
     }
-
   }
 
   /* Add remaining unchanged lines. */
@@ -625,7 +627,7 @@ apply_ed_diff(smartlist_t *cons1, smartlist_t *diff)
   smartlist_reverse(cons2);
   return cons2;
 
-error_cleanup:
+  error_cleanup:
 
   SMARTLIST_FOREACH(cons2, char*, line, tor_free(line));
   smartlist_free(cons2);
@@ -660,8 +662,10 @@ consdiff_gen_diff(smartlist_t *cons1, smartlist_t *cons2)
   crypto_digest_smartlist_ends(cons2_hash, cons2, "\n");
   char cons1_hash_hex[HEX_DIGEST256_LEN+1];
   char cons2_hash_hex[HEX_DIGEST256_LEN+1];
-  base16_encode(cons1_hash_hex, HEX_DIGEST256_LEN+1, cons1_hash, DIGEST256_LEN);
-  base16_encode(cons2_hash_hex, HEX_DIGEST256_LEN+1, cons2_hash, DIGEST256_LEN);
+  base16_encode(cons1_hash_hex, HEX_DIGEST256_LEN+1,
+      cons1_hash, DIGEST256_LEN);
+  base16_encode(cons2_hash_hex, HEX_DIGEST256_LEN+1,
+      cons2_hash, DIGEST256_LEN);
 
   /* Create the resulting consensus diff. */
   smartlist_t *result = smartlist_new();
@@ -717,7 +721,8 @@ consdiff_apply_diff(smartlist_t *cons1, smartlist_t *diff)
   char cons1_hash[DIGEST256_LEN];
   crypto_digest_smartlist_ends(cons1_hash, cons1, "\n");
   char cons1_hash_hex[HEX_DIGEST256_LEN+1];
-  base16_encode(cons1_hash_hex, HEX_DIGEST256_LEN+1, cons1_hash, DIGEST256_LEN);
+  base16_encode(cons1_hash_hex, HEX_DIGEST256_LEN+1,
+      cons1_hash, DIGEST256_LEN);
   if (memcmp(cons1_hash, e_cons1_hash, DIGEST256_LEN*sizeof(char)) != 0)
     goto error_cleanup;
 
@@ -742,7 +747,7 @@ consdiff_apply_diff(smartlist_t *cons1, smartlist_t *diff)
   smartlist_free(hash_words);
   return cons2;
 
-error_cleanup:
+  error_cleanup:
 
   if (hash_words) {
     SMARTLIST_FOREACH(hash_words, char *, cp, tor_free(cp));
@@ -756,4 +761,3 @@ error_cleanup:
   return NULL;
 }
 
-// vim: et sw=2
