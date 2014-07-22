@@ -57,6 +57,7 @@ src_test_test_SOURCES = \
 	src/test/test_circuitlist.c \
 	src/test/test_circuitmux.c \
 	src/test/test_config.c \
+	src/test/test_consdiff.c \
 	src/test/test_containers.c \
 	src/test/test_controller.c \
 	src/test/test_controller_events.c \
