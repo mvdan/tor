@@ -440,7 +440,7 @@ test_consdiff_gen_ed_diff(void)
   diff = gen_ed_diff(cons1, cons2);
   test_eq_ptr(NULL, diff);
 
-#define MAX_LINE_COUNT (10^4)
+#define MAX_LINE_COUNT (10000)
   /* Too many lines to be fed to the quadratic-time function. */
   smartlist_clear(cons1);
   smartlist_clear(cons2);

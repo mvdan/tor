@@ -464,7 +464,7 @@ gen_ed_diff(smartlist_t *cons1, smartlist_t *cons2)
      */
     len_sl1 = i1-start1;
     len_sl2 = i2-start2;
-#define MAX_LINE_COUNT (10^4)
+#define MAX_LINE_COUNT (10000)
     if (len_sl1 > MAX_LINE_COUNT || len_sl2 > MAX_LINE_COUNT)
       goto error_cleanup;
 
