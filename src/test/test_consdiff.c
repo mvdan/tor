@@ -1,6 +1,12 @@
+/* Copyright (c) 2014, Daniel Martí
+ * Copyright (c) 2014, The Tor Project, Inc. */
+/* See LICENSE for licensing information */
+
 #include "orconfig.h"
 #include "or.h"
 #include "test.h"
+
+#include "consdiff.c"
 
 static void
 test_consdiff_smartlist_slice(void)
@@ -909,6 +915,24 @@ test_consdiff_apply_diff(void)
   smartlist_free(diff);
 }
 
+#define CONSDIFF_LEGACY(name)                                          \
+  { #name, legacy_test_helper, 0, &legacy_setup, test_consdiff_ ## name }
+
 struct testcase_t consdiff_tests[] = {
+  CONSDIFF_LEGACY(smartlist_slice),
+  CONSDIFF_LEGACY(smartlist_slice_string_pos),
+  CONSDIFF_LEGACY(lcs_lens),
+  CONSDIFF_LEGACY(trim_slices),
+  CONSDIFF_LEGACY(set_changed),
+  CONSDIFF_LEGACY(calc_changes),
+  CONSDIFF_LEGACY(get_id_hash),
+  CONSDIFF_LEGACY(is_valid_router_entry),
+  CONSDIFF_LEGACY(next_router),
+  CONSDIFF_LEGACY(base64cmp),
+  CONSDIFF_LEGACY(gen_ed_diff),
+  CONSDIFF_LEGACY(apply_ed_diff),
+  CONSDIFF_LEGACY(crypto_digest_smartlist_ends),
+  CONSDIFF_LEGACY(gen_diff),
+  CONSDIFF_LEGACY(apply_diff),
   END_OF_TESTCASES
 };
