@@ -11,4 +11,5 @@
   merged into `client.c` in the history
 
 * **old-repo-cleaned-3**: Like old-repo-cleaned-2, but with a dozen commits
-  squashed and some lazy commit messages reworded.
+  squashed and some lazy commit messages reworded. Also, client.c and server.c
+  are now removed when consdiff.c is created.
