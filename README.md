@@ -14,5 +14,6 @@
   squashed and some lazy commit messages reworded. Also, client.c and server.c
   are now removed when consdiff.c is created.
 
-* **old-repo-cleaned-4**: Like old-repo-cleaned-3, but with the files under
-  src/or and src/test.
+* **old-repo-cleaned-4**: Like old-repo-cleaned-3, but prepared to be merged
+  into a feature branch with Tor - files moved where they should be, tests
+  integrated, etc.
