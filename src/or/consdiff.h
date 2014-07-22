@@ -5,6 +5,8 @@
 #ifndef TOR_CONSDIFF_H
 #define TOR_CONSDIFF_H
 
+#include "container.h"
+
 /** Data structure to define a slice of a smarltist. */
 typedef struct {
   /** Smartlist that this slice is made from. */
