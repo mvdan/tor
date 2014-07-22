@@ -1120,6 +1120,7 @@ extern struct testcase_t checkdir_tests[];
 extern struct testcase_t circuitlist_tests[];
 extern struct testcase_t circuitmux_tests[];
 extern struct testcase_t config_tests[];
+extern struct testcase_t consdiff_tests[];
 extern struct testcase_t container_tests[];
 extern struct testcase_t controller_event_tests[];
 extern struct testcase_t crypto_tests[];
@@ -1153,8 +1154,6 @@ struct testgroup_t testgroups[] = {
   { "", test_array },
   { "accounting/", accounting_tests },
   { "addr/", addr_tests },
-  { "address/", address_tests },
-  { "buffer/", buffer_tests },
   { "cellfmt/", cell_format_tests },
   { "cellqueue/", cell_queue_tests },
   { "channel/", channel_tests },
@@ -1163,6 +1162,7 @@ struct testgroup_t testgroups[] = {
   { "circuitlist/", circuitlist_tests },
   { "circuitmux/", circuitmux_tests },
   { "config/", config_tests },
+  { "consdiff/", consdiff_tests },
   { "container/", container_tests },
   { "control/", controller_event_tests },
   { "crypto/", crypto_tests },
