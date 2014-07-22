@@ -25,6 +25,7 @@ static smartlist_slice_t *
 smartlist_slice(smartlist_t *list, int offset, int len)
 {
   int list_len = smartlist_len(list);
+  smartlist_slice_t *slice;
   tor_assert(offset >= 0);
   /* If we are making a slice out of an empty list, ignore the 0<0 failure. */
   tor_assert(offset < list_len || list_len == 0);
@@ -33,7 +34,7 @@ smartlist_slice(smartlist_t *list, int offset, int len)
     len = smartlist_len(list) - offset;
   tor_assert(len >= 0 && offset+len <= list_len);
 
-  smartlist_slice_t *slice = tor_malloc(sizeof(smartlist_slice_t));
+  slice = tor_malloc(sizeof(smartlist_slice_t));
   slice->list = list;
   slice->offset = offset;
   slice->len = len;
@@ -63,7 +64,6 @@ smartlist_slice_string_pos(smartlist_slice_t *slice, const char *string)
 static int *
 lcs_lens(smartlist_slice_t *slice1, smartlist_slice_t *slice2, int direction)
 {
-  tor_assert(direction == 1 || direction == -1);
   int i, j, si, sj;
   size_t a_size = sizeof(int) * (slice2->len+1);
 
@@ -72,13 +72,15 @@ lcs_lens(smartlist_slice_t *slice1, smartlist_slice_t *slice2, int direction)
   /* Copy of the lcs lengths from the last iteration. */
   int *prev = tor_malloc(a_size);
 
+  tor_assert(direction == 1 || direction == -1);
+
   si = slice1->offset;
   if (direction == -1) si += (slice1->len-1);
   for (i = 0; i < slice1->len; ++i, si+=direction) {
 
+    const char *line1 = smartlist_get(slice1->list, si);
     /* Store the last results. */
     memcpy(prev, result, a_size);
-    const char *line1 = smartlist_get(slice1->list, si);
 
     sj = slice2->offset;
     if (direction == -1) sj += (slice2->len-1);
@@ -103,8 +105,8 @@ lcs_lens(smartlist_slice_t *slice1, smartlist_slice_t *slice2, int direction)
 static void
 trim_slices(smartlist_slice_t *slice1, smartlist_slice_t *slice2)
 {
-  const char *line1 = NULL;
-  const char *line2 = NULL;
+  const char *line1 = NULL, *line2 = NULL;
+  int i1, i2;
 
   while (slice1->len>0 && slice2->len>0) {
     line1 = smartlist_get(slice1->list, slice1->offset);
@@ -114,8 +116,8 @@ trim_slices(smartlist_slice_t *slice1, smartlist_slice_t *slice2)
     slice2->offset++; slice2->len--;
   }
 
-  int i1 = (slice1->offset+slice1->len)-1;
-  int i2 = (slice2->offset+slice2->len)-1;
+  i1 = (slice1->offset+slice1->len)-1;
+  i2 = (slice2->offset+slice2->len)-1;
   line1 = NULL;
   line2 = NULL;
 
@@ -137,14 +139,15 @@ static void
 set_changed(bitarray_t *changed1, bitarray_t *changed2,
             smartlist_slice_t *slice1, smartlist_slice_t *slice2)
 {
+  int i, end, toskip = -1;
   tor_assert(slice1->len == 0 || slice1->len == 1);
-  int toskip = -1;
+
   if (slice1->len == 1) {
     const char *line_common = smartlist_get(slice1->list, slice1->offset);
     toskip = smartlist_slice_string_pos(slice2, line_common);
     if (toskip == -1) bitarray_set(changed1, slice1->offset);
   }
-  int i, end = slice2->offset + slice2->len;
+  end = slice2->offset + slice2->len;
   for (i = slice2->offset; i < end; ++i)
     if (i != toskip) bitarray_set(changed2, i);
 }
@@ -179,19 +182,20 @@ calc_changes(smartlist_slice_t *slice1, smartlist_slice_t *slice2,
   /* Keep on splitting the slices in two. */
   } else {
 
+    int mid, *lens_top, *lens_bot, i, k, max_sum;
+    smartlist_slice_t *top, *bot, *left, *right;
+
     /* Split the first slice in half. */
-    int mid = slice1->offset+(slice1->len/2);
-    smartlist_slice_t *top = smartlist_slice(slice1->list,
-        slice1->offset, mid-slice1->offset);
-    smartlist_slice_t *bot = smartlist_slice(slice1->list,
-        mid, (slice1->offset+slice1->len)-mid);
+    mid = slice1->offset+(slice1->len/2);
+    top = smartlist_slice(slice1->list, slice1->offset, mid-slice1->offset);
+    bot = smartlist_slice(slice1->list, mid, (slice1->offset+slice1->len)-mid);
 
     /* 'k' will be the column that we find is optimal thanks to the lcs
      * lengths that lcs_lens reported.
      */
-    int *lens_top = lcs_lens(top, slice2, 1);
-    int *lens_bot = lcs_lens(bot, slice2, -1);
-    int i, k=0, max_sum=-1;
+    lens_top = lcs_lens(top, slice2, 1);
+    lens_bot = lcs_lens(bot, slice2, -1);
+    k=0, max_sum=-1;
     for (i = 0; i < slice2->len+1; ++i) {
       int sum = lens_top[i] + lens_bot[slice2->len-i];
       if (sum > max_sum) {
@@ -203,10 +207,8 @@ calc_changes(smartlist_slice_t *slice1, smartlist_slice_t *slice2,
     tor_free(lens_bot);
 
     /* Split the second slice by the column 'k'. */
-    smartlist_slice_t *left = smartlist_slice(slice2->list,
-        slice2->offset, k);
-    smartlist_slice_t *right = smartlist_slice(slice2->list,
-        slice2->offset+k, slice2->len-k);
+    left = smartlist_slice(slice2->list, slice2->offset, k);
+    right = smartlist_slice(slice2->list, slice2->offset+k, slice2->len-k);
 
     calc_changes(top, left, changed1, changed2);
     calc_changes(bot, right, changed1, changed2);
@@ -246,14 +248,16 @@ static const uint8_t base64_compare_table[256] = {
 static const char *
 get_id_hash(const char *r_line)
 {
+  const char *hash;
+  const unsigned char *hash_end;
   r_line += strlen("r ");
 
   /* Skip the router name. */
-  const char *hash = strchr(r_line, ' ');
+  hash = strchr(r_line, ' ');
   if (hash == NULL) return NULL;
 
   hash++;
-  const unsigned char *hash_end = (unsigned char*)hash;
+  hash_end = (unsigned char*)hash;
   /* Stop when the first non-base64 character is found. */
   while (base64_compare_table[*hash_end] != X) hash_end++;
 
@@ -280,10 +284,11 @@ is_valid_router_entry(const char *line)
 static int
 next_router(smartlist_t *cons, int cur)
 {
+  const char *line;
   int len = smartlist_len(cons);
   tor_assert(cur >= -1 && cur < len);
   if (++cur >= len) return len;
-  const char *line = smartlist_get(cons, cur);
+  line = smartlist_get(cons, cur);
   while (!is_valid_router_entry(line)) {
     if (++cur >= len) return len;
     line = smartlist_get(cons, cur);
@@ -297,14 +302,15 @@ next_router(smartlist_t *cons, int cur)
 static int
 base64cmp(const char *hash1, const char *hash2)
 {
+  const unsigned char *a, *b;
   /* NULL is always lower, useful for last_hash which starts at NULL. */
   if (hash1 == NULL && hash2 == NULL) return 0;
   if (hash1 == NULL) return -1;
   if (hash2 == NULL) return 1;
 
   /* Don't index with a char; char may be signed. */
-  const unsigned char *a = (unsigned char*)hash1;
-  const unsigned char *b = (unsigned char*)hash2;
+  a = (unsigned char*)hash1;
+  b = (unsigned char*)hash2;
   while (1) {
     uint8_t av = base64_compare_table[*a];
     uint8_t bv = base64_compare_table[*b];
@@ -379,6 +385,10 @@ gen_ed_diff(smartlist_t *cons1, smartlist_t *cons2)
    * once.
    */
   while (i1 < len1 || i2 < len2) {
+
+    int len_sl1, len_sl2;
+    smartlist_slice_t *cons1_sl, *cons2_sl;
+
     /* Advance each of the two navigation positions by one router entry if not
      * yet at the end.
      */
@@ -452,14 +462,14 @@ gen_ed_diff(smartlist_t *cons1, smartlist_t *cons2)
      * never happen with any pair of real consensuses. Feeding more than 10K
      * lines to calc_changes would be very slow anyway.
      */
-    int len_sl1 = i1-start1;
-    int len_sl2 = i2-start2;
+    len_sl1 = i1-start1;
+    len_sl2 = i2-start2;
 #define MAX_LINE_COUNT (10000)
     if (len_sl1 > MAX_LINE_COUNT || len_sl2 > MAX_LINE_COUNT)
       goto error_cleanup;
 
-    smartlist_slice_t *cons1_sl = smartlist_slice(cons1, start1, len_sl1);
-    smartlist_slice_t *cons2_sl = smartlist_slice(cons2, start2, len_sl2);
+    cons1_sl = smartlist_slice(cons1, start1, len_sl1);
+    cons2_sl = smartlist_slice(cons2, start2, len_sl2);
     calc_changes(cons1_sl, cons2_sl, changed1, changed2);
     tor_free(cons1_sl);
     tor_free(cons2_sl);
@@ -472,6 +482,8 @@ gen_ed_diff(smartlist_t *cons1, smartlist_t *cons2)
   i1=len1-1, i2=len2-1;
   while (i1 > 0 || i2 > 0) {
 
+    int start1, start2, end1, end2, added, deleted;
+
     /* We are at a point were no changed bools are true, so just keep going. */
     if (!(i1 >= 0 && bitarray_is_set(changed1, i1)) &&
         !(i2 >= 0 && bitarray_is_set(changed2, i2))) {
@@ -480,20 +492,21 @@ gen_ed_diff(smartlist_t *cons1, smartlist_t *cons2)
       continue;
     }
 
-    int end1 = i1, end2 = i2;
+    end1 = i1, end2 = i2;
 
     /* Grab all contiguous changed lines */
     while (i1 >= 0 && bitarray_is_set(changed1, i1)) i1--;
     while (i2 >= 0 && bitarray_is_set(changed2, i2)) i2--;
 
-    int start1 = i1+1, start2 = i2+1;
-    int added = end2-i2, deleted = end1-i1;
+    start1 = i1+1, start2 = i2+1;
+    added = end2-i2, deleted = end1-i1;
 
     if (added == 0) {
       if (deleted == 1) smartlist_add_asprintf(result, "%id", start1+1);
       else smartlist_add_asprintf(result, "%i,%id", start1+1, start1+deleted);
 
     } else {
+      int i;
       if (deleted == 0)
         smartlist_add_asprintf(result, "%ia", start1);
       else if (deleted == 1)
@@ -501,7 +514,6 @@ gen_ed_diff(smartlist_t *cons1, smartlist_t *cons2)
       else
         smartlist_add_asprintf(result, "%i,%ic", start1+1, start1+deleted);
 
-      int i;
       for (i = start2; i <= end2; ++i) {
         const char *line = smartlist_get(cons2, i);
         /* One of the added lines is ".", so cleanup and error. */
@@ -543,6 +555,7 @@ apply_ed_diff(smartlist_t *cons1, smartlist_t *diff)
     const char *diff_line = smartlist_get(diff, i);
     char *endptr1, *endptr2;
     int start, end;
+    char action;
 
 #define LINE_BASE 10
     start = (int)strtol(diff_line, &endptr1, LINE_BASE);
@@ -570,7 +583,7 @@ apply_ed_diff(smartlist_t *cons1, smartlist_t *diff)
     /* Action is longer than one char. */
     if (*(endptr2+1) != '\0') goto error_cleanup;
 
-    char action = *endptr2;
+    action = *endptr2;
 
     switch (action) {
       case 'a':
@@ -596,7 +609,7 @@ apply_ed_diff(smartlist_t *cons1, smartlist_t *diff)
     /** Add new lines.
      * In reverse order, since it will all be reversed at the end. */
     if (action == 'a' || action == 'c') {
-      int added_end = i;
+      int added_i, added_end = i;
 
       i++; /* Skip the line with the range and command. */
       while (i < diff_len) {
@@ -605,7 +618,7 @@ apply_ed_diff(smartlist_t *cons1, smartlist_t *diff)
         if (++i == diff_len) goto error_cleanup;
       }
 
-      int added_i = i-1;
+      added_i = i-1;
 
       /* It would make no sense to add zero new lines. */
       if (added_i == added_end) goto error_cleanup;
@@ -643,32 +656,35 @@ apply_ed_diff(smartlist_t *cons1, smartlist_t *diff)
 smartlist_t *
 consdiff_gen_diff(smartlist_t *cons1, smartlist_t *cons2)
 {
-  smartlist_t *ed_diff = gen_ed_diff(cons1, cons2);
+  smartlist_t *ed_diff, *ed_cons2, *result;
+  int cons2_eq;
+  char cons1_hash[DIGEST256_LEN];
+  char cons2_hash[DIGEST256_LEN];
+  char cons1_hash_hex[HEX_DIGEST256_LEN+1];
+  char cons2_hash_hex[HEX_DIGEST256_LEN+1];
+
+  ed_diff = gen_ed_diff(cons1, cons2);
   /* See if the script could be generated. */
   if (ed_diff == NULL) return NULL;
 
   /* See that the script actually produces what we want. */
-  smartlist_t *ed_cons2 = apply_ed_diff(cons1, ed_diff);
+  ed_cons2 = apply_ed_diff(cons1, ed_diff);
   if (!ed_cons2) return NULL;
-  int cons2_eq = smartlist_strings_eq(cons2, ed_cons2);
+  cons2_eq = smartlist_strings_eq(cons2, ed_cons2);
   SMARTLIST_FOREACH(ed_cons2, char*, line, tor_free(line));
   smartlist_free(ed_cons2);
   if (!cons2_eq) return NULL;
 
   /* Calculate the digests. */
-  char cons1_hash[DIGEST256_LEN];
-  char cons2_hash[DIGEST256_LEN];
   crypto_digest_smartlist_ends(cons1_hash, cons1, "\n");
   crypto_digest_smartlist_ends(cons2_hash, cons2, "\n");
-  char cons1_hash_hex[HEX_DIGEST256_LEN+1];
-  char cons2_hash_hex[HEX_DIGEST256_LEN+1];
   base16_encode(cons1_hash_hex, HEX_DIGEST256_LEN+1,
       cons1_hash, DIGEST256_LEN);
   base16_encode(cons2_hash_hex, HEX_DIGEST256_LEN+1,
       cons2_hash, DIGEST256_LEN);
 
   /* Create the resulting consensus diff. */
-  smartlist_t *result = smartlist_new();
+  result = smartlist_new();
   smartlist_add_asprintf(result, "network-status-diff-version 1");
   smartlist_add_asprintf(result, "hash %s %s", cons1_hash_hex, cons2_hash_hex);
   smartlist_add_all(result, ed_diff);
@@ -684,12 +700,17 @@ consdiff_gen_diff(smartlist_t *cons1, smartlist_t *cons2)
 smartlist_t *
 consdiff_apply_diff(smartlist_t *cons1, smartlist_t *diff)
 {
-  smartlist_t *hash_words = NULL;
-  smartlist_t *cons2 = NULL;
+  smartlist_t *hash_words = NULL, *cons2 = NULL, *ed_diff;
+  const char *format, *e_cons1_hash_hex, *e_cons2_hash_hex;
+  char e_cons1_hash[DIGEST256_LEN];
+  char e_cons2_hash[DIGEST256_LEN];
+  char cons1_hash[DIGEST256_LEN];
+  char cons2_hash[DIGEST256_LEN];
+  char cons1_hash_hex[HEX_DIGEST256_LEN+1];
   if (smartlist_len(diff) < 3) goto error_cleanup; /* No ed diff present. */
 
   /* Check that it's the format and version we know. */
-  const char *format = smartlist_get(diff, 0);
+  format = smartlist_get(diff, 0);
   if (strcmp(format, "network-status-diff-version 1")) goto error_cleanup;
 
   /* Grab the SHA256 base16 hashes. */
@@ -703,24 +724,20 @@ consdiff_apply_diff(smartlist_t *cons1, smartlist_t *diff)
 
   /* Expected hashes as found in the consensus diff header. They must be of
    * length HEX_DIGEST256_LEN, normally 64 hexadecimal characters. */
-  char *e_cons1_hash_hex = smartlist_get(hash_words, 1);
+  e_cons1_hash_hex = smartlist_get(hash_words, 1);
   if (strlen(e_cons1_hash_hex) != HEX_DIGEST256_LEN) goto error_cleanup;
-  char *e_cons2_hash_hex = smartlist_get(hash_words, 2);
+  e_cons2_hash_hex = smartlist_get(hash_words, 2);
   if (strlen(e_cons2_hash_hex) != HEX_DIGEST256_LEN) goto error_cleanup;
 
   /* If any of the decodings fail, error to make sure that the hashes are
    * proper base16-encoded SHA256 digests. */
-  char e_cons1_hash[DIGEST256_LEN];
-  char e_cons2_hash[DIGEST256_LEN];
   if (base16_decode(e_cons1_hash, DIGEST256_LEN,
       e_cons1_hash_hex, HEX_DIGEST256_LEN) != 0) goto error_cleanup;
   if (base16_decode(e_cons2_hash, DIGEST256_LEN,
       e_cons2_hash_hex, HEX_DIGEST256_LEN) != 0) goto error_cleanup;
 
   /* See that the consensus that was given to us matches its hash. */
-  char cons1_hash[DIGEST256_LEN];
   crypto_digest_smartlist_ends(cons1_hash, cons1, "\n");
-  char cons1_hash_hex[HEX_DIGEST256_LEN+1];
   base16_encode(cons1_hash_hex, HEX_DIGEST256_LEN+1,
       cons1_hash, DIGEST256_LEN);
   if (memcmp(cons1_hash, e_cons1_hash, DIGEST256_LEN*sizeof(char)) != 0)
@@ -729,7 +746,7 @@ consdiff_apply_diff(smartlist_t *cons1, smartlist_t *diff)
   /* Grab the ed diff and calculate the resulting consensus. */
   /* To avoid copying memory or iterating over all the elements, make a
    * read-only smartlist without the two header lines. */
-  smartlist_t *ed_diff = tor_malloc(sizeof(smartlist_t));
+  ed_diff = tor_malloc(sizeof(smartlist_t));
   ed_diff->list = diff->list+2;
   ed_diff->num_used = diff->num_used-2;
   ed_diff->capacity = diff->capacity-2;
@@ -737,7 +754,6 @@ consdiff_apply_diff(smartlist_t *cons1, smartlist_t *diff)
   tor_free(ed_diff);
   if (cons2 == NULL) goto error_cleanup; /* ed diff could not be applied. */
 
-  char cons2_hash[DIGEST256_LEN];
   crypto_digest_smartlist_ends(cons2_hash, cons2, "\n");
   /* The resulting consensus doesn't match its hash. */
   if (memcmp(cons2_hash, e_cons2_hash, DIGEST256_LEN*sizeof(char)) != 0)
