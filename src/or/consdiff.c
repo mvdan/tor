@@ -17,27 +17,25 @@
 #include "util.h"
 #include "consdiff.h"
 
-/** Create (allocate) a new slice from a smartlist. Assumes that the offset
- * and the consequent length are in the bounds of the smartlist. If len is -1,
- * the slice is to reach the end of the smartlist.
+/** Create (allocate) a new slice from a smartlist. Assumes that the start
+ * and the end indexes are within the bounds of the initial smartlist. The end
+ * element is not part of the resulting slice. If end is -1, the slice is to
+ * reach the end of the smartlist.
  */
 static smartlist_slice_t *
-smartlist_slice(smartlist_t *list, int offset, int len)
+smartlist_slice(smartlist_t *list, int start, int end)
 {
   int list_len = smartlist_len(list);
   smartlist_slice_t *slice;
-  tor_assert(offset >= 0);
-  /* If we are making a slice out of an empty list, ignore the 0<0 failure. */
-  tor_assert(offset < list_len || list_len == 0);
-
-  if (len == -1)
-    len = smartlist_len(list) - offset;
-  tor_assert(len >= 0 && offset+len <= list_len);
+  tor_assert(start >= 0);
+  tor_assert(start <= list_len);
+  if (end == -1) end = list_len;
+  tor_assert(start <= end);
 
   slice = tor_malloc(sizeof(smartlist_slice_t));
   slice->list = list;
-  slice->offset = offset;
-  slice->len = len;
+  slice->offset = start;
+  slice->len = end - start;
   return slice;
 }
 
@@ -186,9 +184,10 @@ calc_changes(smartlist_slice_t *slice1, smartlist_slice_t *slice2,
     smartlist_slice_t *top, *bot, *left, *right;
 
     /* Split the first slice in half. */
-    mid = slice1->offset+(slice1->len/2);
-    top = smartlist_slice(slice1->list, slice1->offset, mid-slice1->offset);
-    bot = smartlist_slice(slice1->list, mid, (slice1->offset+slice1->len)-mid);
+    mid = slice1->len/2;
+    top = smartlist_slice(slice1->list, slice1->offset, slice1->offset+mid);
+    bot = smartlist_slice(slice1->list, slice1->offset+mid,
+        slice1->offset+slice1->len);
 
     /* 'k' will be the column that we find is optimal thanks to the lcs
      * lengths that lcs_lens reported.
@@ -207,8 +206,9 @@ calc_changes(smartlist_slice_t *slice1, smartlist_slice_t *slice2,
     tor_free(lens_bot);
 
     /* Split the second slice by the column 'k'. */
-    left = smartlist_slice(slice2->list, slice2->offset, k);
-    right = smartlist_slice(slice2->list, slice2->offset+k, slice2->len-k);
+    left = smartlist_slice(slice2->list, slice2->offset, slice2->offset+k);
+    right = smartlist_slice(slice2->list, slice2->offset+k,
+        slice2->offset+slice2->len);
 
     calc_changes(top, left, changed1, changed2);
     calc_changes(bot, right, changed1, changed2);
@@ -386,7 +386,6 @@ gen_ed_diff(smartlist_t *cons1, smartlist_t *cons2)
    */
   while (i1 < len1 || i2 < len2) {
 
-    int len_sl1, len_sl2;
     smartlist_slice_t *cons1_sl, *cons2_sl;
 
     /* Advance each of the two navigation positions by one router entry if not
@@ -462,14 +461,12 @@ gen_ed_diff(smartlist_t *cons1, smartlist_t *cons2)
      * never happen with any pair of real consensuses. Feeding more than 10K
      * lines to calc_changes would be very slow anyway.
      */
-    len_sl1 = i1-start1;
-    len_sl2 = i2-start2;
 #define MAX_LINE_COUNT (10000)
-    if (len_sl1 > MAX_LINE_COUNT || len_sl2 > MAX_LINE_COUNT)
+    if (i1-start1 > MAX_LINE_COUNT || i2-start2 > MAX_LINE_COUNT)
       goto error_cleanup;
 
-    cons1_sl = smartlist_slice(cons1, start1, len_sl1);
-    cons2_sl = smartlist_slice(cons2, start2, len_sl2);
+    cons1_sl = smartlist_slice(cons1, start1, i1);
+    cons2_sl = smartlist_slice(cons2, start2, i2);
     calc_changes(cons1_sl, cons2_sl, changed1, changed2);
     tor_free(cons1_sl);
     tor_free(cons2_sl);
