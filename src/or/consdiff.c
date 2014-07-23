@@ -31,10 +31,6 @@
  **/
 
 #include "or.h"
-#include "config.h"
-#include "container.h"
-#include "crypto.h"
-#include "util.h"
 #include "consdiff.h"
 
 /** Create (allocate) a new slice from a smartlist. Assumes that the start
