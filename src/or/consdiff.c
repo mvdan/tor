@@ -248,8 +248,7 @@ static const uint8_t base64_compare_table[256] = {
 static const char *
 get_id_hash(const char *r_line)
 {
-  const char *hash;
-  const unsigned char *hash_end;
+  const char *hash, *hash_end;
   r_line += strlen("r ");
 
   /* Skip the router name. */
@@ -257,12 +256,15 @@ get_id_hash(const char *r_line)
   if (hash == NULL) return NULL;
 
   hash++;
-  hash_end = (unsigned char*)hash;
-  /* Stop when the first non-base64 character is found. */
-  while (base64_compare_table[*hash_end] != X) hash_end++;
+  hash_end = hash;
+  /* Stop when the first non-base64 character is found. Use unsigned chars to
+   * avoid negative indexes causing crashes. */
+  while (base64_compare_table[*((unsigned char*)hash_end)] != X)
+    hash_end++;
 
-  /* The minimum length is 27 characters. */
-  if ((char*)hash_end-hash < 27) return NULL;
+  /* Empty hash. */
+  if (hash_end == hash) return NULL;
+
   return hash;
 }
 
