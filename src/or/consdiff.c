@@ -6,12 +6,32 @@
  * \file consdiff.c
  * \brief Consensus diff implementation, including both the generation and the
  * application of diffs in a minimal ed format.
+ *
+ * The consensus diff application is done in consdiff_apply_diff, which relies
+ * on apply_ed_diff for the main ed diff part and on some digest helper
+ * functions to check the digest hashes found in the consensus diff header.
+ *
+ * The consensus diff generation is more complex. consdiff_gen_diff generates
+ * it, relying on gen_ed_diff to generate the ed diff and some digest helper
+ * functions to generate the digest hashes.
+ *
+ * gen_ed_diff is the tricky bit. In it simplest form, it will take quadratic
+ * time and linear space to generate an ed diff given two smartlists. As shown
+ * in its comment section, calling calc_changes on the entire two consensuses
+ * will calculate what is to be added and what is to be deleted in the diff.
+ * Its comment section briefly explains how it works.
+ *
+ * In our case specific to consensuses, we take advantage of the fact that
+ * consensuses list routers sorted by their identities. We use that
+ * information to avoid running calc_changes on the whole smartlists.
+ * gen_ed_diff will navigate through the two consensuses identity by identity
+ * and will send small couples of slices to calc_changes, keeping the running
+ * time near-linear. This is explained in more detail in the gen_ed_diff
+ * comments.
  **/
 
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
-
+#include "or.h"
+#include "config.h"
 #include "container.h"
 #include "crypto.h"
 #include "util.h"
@@ -151,13 +171,16 @@ set_changed(bitarray_t *changed1, bitarray_t *changed2,
 }
 
 /**
- * Helper: Work out all the changed booleans for all the lines in the two
- * slices, saving them in the corresponding changed arrays. This recursive
- * function will keep on splitting slice1 by half and splitting up slice2 by
- * the column that lcs_lens deems appropriate. Once any of the two slices gets
- * small enough, set_changed will be used to finally store that portion of the
- * result. It is assumed that the lengths of the changed bitarrays match those
- * of their full consensus smartlists.
+ * Helper: Figure out what elements are new or gone on the second smartlist
+ * relative to the first smartlist, and store the booleans in the bitarrays.
+ * True on the first bitarray means the element is gone, true on the second
+ * bitarray means it's new.
+ *
+ * In its base case, either of the smartlists is of length <= 1 and we can
+ * quickly see what elements are new or are gone. In the other case, we will
+ * split one smartlist by half and we'll use optimal_column_to_split to find
+ * the optimal column at which to split the second smartlist so that we are
+ * finding the smallest diff possible.
  */
 static void
 calc_changes(smartlist_slice_t *slice1, smartlist_slice_t *slice2,
@@ -360,6 +383,18 @@ crypto_digest_smartlist_ends(char *digest_out, const smartlist_t *lst,
  * smartlists. Will return NULL if the diff could not be generated, which can
  * happen if any lines the script had to add matched "." or if the routers
  * were not properly ordered.
+ *
+ * This implementation is consensus-specific. To generate an ed diff for any
+ * given input in quadratic time, you can replace all the code until the
+ * navigation in reverse order with the following:
+ *
+ *   int len1 = smartlist_len(cons1);
+ *   int len2 = smartlist_len(cons2);
+ *   bitarray_t *changed1 = bitarray_init_zero(len1);
+ *   bitarray_t *changed2 = bitarray_init_zero(len2);
+ *   cons1_sl = smartlist_slice(cons1, 0, -1);
+ *   cons2_sl = smartlist_slice(cons2, 0, -1);
+ *   calc_changes(cons1_sl, cons2_sl, changed1, changed2);
  */
 static smartlist_t *
 gen_ed_diff(smartlist_t *cons1, smartlist_t *cons2)
@@ -398,8 +433,12 @@ gen_ed_diff(smartlist_t *cons1, smartlist_t *cons2)
       if (i1 != len1) {
         last_hash1 = hash1;
         hash1 = get_id_hash(smartlist_get(cons1, i1));
-        /* Identity hashes must always increase. */
-        if (base64cmp(hash1, last_hash1) <= 0) goto error_cleanup;
+        if (base64cmp(hash1, last_hash1) <= 0) {
+          log_warn(LD_CONSDIFF, "Refusing to generate consensus diff because "
+              "the base consensus doesn't have its router entries "
+              "sorted properly.");
+          goto error_cleanup;
+        }
       }
     }
 
@@ -408,8 +447,12 @@ gen_ed_diff(smartlist_t *cons1, smartlist_t *cons2)
       if (i2 != len2) {
         last_hash2 = hash2;
         hash2 = get_id_hash(smartlist_get(cons2, i2));
-        /* Identity hashes must always increase. */
-        if (base64cmp(hash2, last_hash2) <= 0) goto error_cleanup;
+        if (base64cmp(hash2, last_hash2) <= 0) {
+          log_warn(LD_CONSDIFF, "Refusing to generate consensus diff because "
+              "the target consensus doesn't have its router entries "
+              "sorted properly.");
+          goto error_cleanup;
+        }
       }
     }
 
@@ -437,8 +480,12 @@ gen_ed_diff(smartlist_t *cons1, smartlist_t *cons2)
           }
           last_hash1 = hash1;
           hash1 = get_id_hash(smartlist_get(cons1, i1));
-          /* Identity hashes must always increase. */
-          if (base64cmp(hash1, last_hash1) <= 0) goto error_cleanup;
+          if (base64cmp(hash1, last_hash1) <= 0) {
+            log_warn(LD_CONSDIFF, "Refusing to generate consensus diff "
+                "because the base consensus doesn't have its router entries "
+                "sorted properly.");
+            goto error_cleanup;
+          }
         }
         if (i2 < len2 && cmp > 0) {
           i2 = next_router(cons2, i2);
@@ -450,8 +497,12 @@ gen_ed_diff(smartlist_t *cons1, smartlist_t *cons2)
           }
           last_hash2 = hash2;
           hash2 = get_id_hash(smartlist_get(cons2, i2));
-          /* Identity hashes must always increase. */
-          if (base64cmp(hash2, last_hash2) <= 0) goto error_cleanup;
+          if (base64cmp(hash2, last_hash2) <= 0) {
+            log_warn(LD_CONSDIFF, "Refusing to generate consensus diff "
+                "because the target consensus doesn't have its router entries "
+                "sorted properly.");
+            goto error_cleanup;
+          }
         }
         cmp = base64cmp(hash1, hash2);
       }
@@ -464,8 +515,11 @@ gen_ed_diff(smartlist_t *cons1, smartlist_t *cons2)
      * lines to calc_changes would be very slow anyway.
      */
 #define MAX_LINE_COUNT (10000)
-    if (i1-start1 > MAX_LINE_COUNT || i2-start2 > MAX_LINE_COUNT)
+    if (i1-start1 > MAX_LINE_COUNT || i2-start2 > MAX_LINE_COUNT) {
+      log_warn(LD_CONSDIFF, "Refusing to generate consensus diff because "
+          "we found too few common router ids.");
       goto error_cleanup;
+    }
 
     cons1_sl = smartlist_slice(cons1, start1, i1);
     cons2_sl = smartlist_slice(cons2, start2, i2);
@@ -515,8 +569,11 @@ gen_ed_diff(smartlist_t *cons1, smartlist_t *cons2)
 
       for (i = start2; i <= end2; ++i) {
         const char *line = smartlist_get(cons2, i);
-        /* One of the added lines is ".", so cleanup and error. */
-        if (!strcmp(line, ".")) goto error_cleanup;
+        if (!strcmp(line, ".")) {
+          log_warn(LD_CONSDIFF, "Cannot generate consensus diff because "
+              "one of the lines to be added is \".\".");
+          goto error_cleanup;
+        }
         smartlist_add(result, tor_strdup(line));
       }
       smartlist_add_asprintf(result, ".");
@@ -556,19 +613,27 @@ apply_ed_diff(smartlist_t *cons1, smartlist_t *diff)
     int start, end;
     char action;
 
-#define LINE_BASE 10
-    start = (int)strtol(diff_line, &endptr1, LINE_BASE);
-
-    /* Missing range start. */
-    if (endptr1 == diff_line) goto error_cleanup;
+    start = (int)strtol(diff_line, &endptr1, 10);
+    if (endptr1 == diff_line) {
+      log_warn(LD_CONSDIFF, "Could not apply consensus diff because "
+          "an ed command was missing a line number.");
+      goto error_cleanup;
+    }
 
     /* Two-item range */
     if (*endptr1 == ',') {
-        end = (int)strtol(endptr1+1, &endptr2, LINE_BASE);
-        /* Missing range end. */
-        if (endptr2 == endptr1+1) goto error_cleanup;
+        end = (int)strtol(endptr1+1, &endptr2, 10);
+        if (endptr2 == endptr1+1) {
+          goto error_cleanup;
+          log_warn(LD_CONSDIFF, "Could not apply consensus diff because "
+              "an ed command was missing a range end line number.");
+        }
         /* Incoherent range. */
-        if (end <= start) goto error_cleanup;
+        if (end <= start) {
+          goto error_cleanup;
+          log_warn(LD_CONSDIFF, "Could not apply consensus diff because "
+              "an invalid range was found in an ed command.");
+        }
 
     /* We'll take <n1> as <n1>,<n1> for simplicity. */
     } else {
@@ -576,11 +641,17 @@ apply_ed_diff(smartlist_t *cons1, smartlist_t *diff)
         end = start;
     }
 
-    /* The diff is not in reverse order. */
-    if (end > j) goto error_cleanup;
+    if (end > j) {
+      log_warn(LD_CONSDIFF, "Could not apply consensus diff because "
+          "its commands are not properly sorted in reverse order.");
+      goto error_cleanup;
+    }
 
-    /* Action is longer than one char. */
-    if (*(endptr2+1) != '\0') goto error_cleanup;
+    if (*(endptr2+1) != '\0') {
+      log_warn(LD_CONSDIFF, "Could not apply consensus diff because "
+          "an ed command longer than one char was found.");
+      goto error_cleanup;
+    }
 
     action = *endptr2;
 
@@ -590,7 +661,8 @@ apply_ed_diff(smartlist_t *cons1, smartlist_t *diff)
       case 'd':
         break;
       default:
-        /* Unrecognised action. */
+        log_warn(LD_CONSDIFF, "Could not apply consensus diff because "
+            "an unrecognised ed command was found.");
         goto error_cleanup;
     }
 
@@ -613,14 +685,21 @@ apply_ed_diff(smartlist_t *cons1, smartlist_t *diff)
       i++; /* Skip the line with the range and command. */
       while (i < diff_len) {
         if (!strcmp(smartlist_get(diff, i), ".")) break;
-        /* Got to the end of the diff before finding ".". */
-        if (++i == diff_len) goto error_cleanup;
+        if (++i == diff_len) {
+          log_warn(LD_CONSDIFF, "Could not apply consensus diff because "
+              "it has lines to be inserted that don't end with a \".\".");
+          goto error_cleanup;
+        }
       }
 
       added_i = i-1;
 
       /* It would make no sense to add zero new lines. */
-      if (added_i == added_end) goto error_cleanup;
+      if (added_i == added_end) {
+        log_warn(LD_CONSDIFF, "Could not apply consensus diff because "
+            "it has an ed command that tries to insert zero lines.");
+        goto error_cleanup;
+      }
 
       while (added_i > added_end) {
         const char *added_line = smartlist_get(diff, added_i--);
@@ -663,16 +742,27 @@ consdiff_gen_diff(smartlist_t *cons1, smartlist_t *cons2)
   char cons2_hash_hex[HEX_DIGEST256_LEN+1];
 
   ed_diff = gen_ed_diff(cons1, cons2);
-  /* See if the script could be generated. */
+  /* ed diff could not be generated - reason already logged by gen_ed_diff. */
   if (ed_diff == NULL) return NULL;
 
   /* See that the script actually produces what we want. */
   ed_cons2 = apply_ed_diff(cons1, ed_diff);
-  if (!ed_cons2) return NULL;
+  if (!ed_cons2) {
+    log_warn(LD_CONSDIFF, "Refusing to generate consensus diff because "
+        "the generated ed diff could not be tested to successfully generate "
+        "the target consensus.");
+    return NULL;
+  }
+
   cons2_eq = smartlist_strings_eq(cons2, ed_cons2);
   SMARTLIST_FOREACH(ed_cons2, char*, line, tor_free(line));
   smartlist_free(ed_cons2);
-  if (!cons2_eq) return NULL;
+  if (!cons2_eq) {
+    log_warn(LD_CONSDIFF, "Refusing to generate consensus diff because "
+        "the generated ed diff did not generate the target consensus "
+        "successfully when tested.");
+    return NULL;
+  }
 
   /* Calculate the digests. */
   crypto_digest_smartlist_ends(cons1_hash, cons1, "\n");
@@ -706,41 +796,58 @@ consdiff_apply_diff(smartlist_t *cons1, smartlist_t *diff)
   char cons1_hash[DIGEST256_LEN];
   char cons2_hash[DIGEST256_LEN];
   char cons1_hash_hex[HEX_DIGEST256_LEN+1];
-  if (smartlist_len(diff) < 3) goto error_cleanup; /* No ed diff present. */
+  if (smartlist_len(diff) < 3) {
+    log_warn(LD_CONSDIFF, "Refusing to apply consensus diff because "
+        "it has too few lines.");
+    goto error_cleanup;
+  }
 
   /* Check that it's the format and version we know. */
   format = smartlist_get(diff, 0);
-  if (strcmp(format, "network-status-diff-version 1")) goto error_cleanup;
+  if (strcmp(format, "network-status-diff-version 1")) {
+    log_warn(LD_CONSDIFF, "The consensus diff's format is not known.");
+    goto error_cleanup;
+  }
 
   /* Grab the SHA256 base16 hashes. */
   hash_words = smartlist_new();
   smartlist_split_string(hash_words, smartlist_get(diff, 1), " ", 0, 0);
 
-  /* There have to be exactly three tokens. */
-  if (smartlist_len(hash_words) != 3) goto error_cleanup;
-  /* Line must start with the word "hash". */
-  if (strcmp(smartlist_get(hash_words, 0), "hash")) goto error_cleanup;
+  /* There have to be three words, the first of which must be "hash". */
+  if (smartlist_len(hash_words) != 3 ||
+      strcmp(smartlist_get(hash_words, 0), "hash")) {
+    log_warn(LD_CONSDIFF, "Refusing to apply consensus diff because "
+        "it does not include the necessary sha256 digests.");
+    goto error_cleanup;
+  }
 
   /* Expected hashes as found in the consensus diff header. They must be of
-   * length HEX_DIGEST256_LEN, normally 64 hexadecimal characters. */
-  e_cons1_hash_hex = smartlist_get(hash_words, 1);
-  if (strlen(e_cons1_hash_hex) != HEX_DIGEST256_LEN) goto error_cleanup;
-  e_cons2_hash_hex = smartlist_get(hash_words, 2);
-  if (strlen(e_cons2_hash_hex) != HEX_DIGEST256_LEN) goto error_cleanup;
-
-  /* If any of the decodings fail, error to make sure that the hashes are
+   * length HEX_DIGEST256_LEN, normally 64 hexadecimal characters.
+   * If any of the decodings fail, error to make sure that the hashes are
    * proper base16-encoded SHA256 digests. */
-  if (base16_decode(e_cons1_hash, DIGEST256_LEN,
-      e_cons1_hash_hex, HEX_DIGEST256_LEN) != 0) goto error_cleanup;
-  if (base16_decode(e_cons2_hash, DIGEST256_LEN,
-      e_cons2_hash_hex, HEX_DIGEST256_LEN) != 0) goto error_cleanup;
+  e_cons1_hash_hex = smartlist_get(hash_words, 1);
+  e_cons2_hash_hex = smartlist_get(hash_words, 2);
+  if (strlen(e_cons1_hash_hex) != HEX_DIGEST256_LEN ||
+      strlen(e_cons2_hash_hex) != HEX_DIGEST256_LEN ||
+      base16_decode(e_cons1_hash, DIGEST256_LEN,
+          e_cons1_hash_hex, HEX_DIGEST256_LEN) != 0 ||
+      base16_decode(e_cons2_hash, DIGEST256_LEN,
+          e_cons2_hash_hex, HEX_DIGEST256_LEN) != 0) {
+    log_warn(LD_CONSDIFF, "Refusing to apply consensus diff because "
+        "the found digests are not proper sha256 digests.");
+    goto error_cleanup;
+  }
 
   /* See that the consensus that was given to us matches its hash. */
   crypto_digest_smartlist_ends(cons1_hash, cons1, "\n");
   base16_encode(cons1_hash_hex, HEX_DIGEST256_LEN+1,
       cons1_hash, DIGEST256_LEN);
-  if (memcmp(cons1_hash, e_cons1_hash, DIGEST256_LEN*sizeof(char)) != 0)
+  if (memcmp(cons1_hash, e_cons1_hash, DIGEST256_LEN*sizeof(char)) != 0) {
+    log_warn(LD_CONSDIFF, "Refusing to apply consensus diff because "
+        "the base consensus doesn't match its own digest as found in "
+        "the consensus diff header.");
     goto error_cleanup;
+  }
 
   /* Grab the ed diff and calculate the resulting consensus. */
   /* To avoid copying memory or iterating over all the elements, make a
@@ -751,12 +858,17 @@ consdiff_apply_diff(smartlist_t *cons1, smartlist_t *diff)
   ed_diff->capacity = diff->capacity-2;
   cons2 = apply_ed_diff(cons1, ed_diff);
   tor_free(ed_diff);
-  if (cons2 == NULL) goto error_cleanup; /* ed diff could not be applied. */
+  /* ed diff could not be applied - reason already logged by apply_ed_diff. */
+  if (cons2 == NULL) goto error_cleanup;
 
+  /* See that the resulting consensus matches its hash. */
   crypto_digest_smartlist_ends(cons2_hash, cons2, "\n");
-  /* The resulting consensus doesn't match its hash. */
-  if (memcmp(cons2_hash, e_cons2_hash, DIGEST256_LEN*sizeof(char)) != 0)
+  if (memcmp(cons2_hash, e_cons2_hash, DIGEST256_LEN*sizeof(char)) != 0) {
+    log_warn(LD_CONSDIFF, "Refusing to apply consensus diff because "
+        "the resulting consensus doesn't match its own digest as found in "
+        "the consensus diff header.");
     goto error_cleanup;
+  }
 
   SMARTLIST_FOREACH(hash_words, char *, cp, tor_free(cp));
   smartlist_free(hash_words);
