@@ -2,6 +2,9 @@
 
 * **master**: Upstream (Tor) master branch
 
+* **consdiff-1**: First feature branch, including old-repo-cleaned-4 on top of
+  master and more work.
+
 * **old-repo**: Exact branch copy from the old `tor_sample` repo
 
 * **old-repo-cleaned**: Like old-repo, but after removing unwanted files with
