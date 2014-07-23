@@ -303,13 +303,10 @@ test_consdiff_get_id_hash(void)
   const char *line, *e_hash;
   /* No hash. */
   test_eq_ptr(NULL, get_id_hash("r name"));
-  /* The hash is too short. */
-  test_eq_ptr(NULL, get_id_hash("r name hash etc"));
   /* The hash contains characters that are not base64. */
-  test_eq_ptr(NULL, get_id_hash(
-        "r name hash_longer_than_27_chars_but_isnt_base64 etc"));
+  test_eq_ptr(NULL, get_id_hash( "r name _hash_isnt_base64 etc"));
 
-  line = "r name hash+longer+than+27+chars+and+valid+base64 etc";
+  line = "r name hash+valid+base64 etc";
   e_hash = line+7;
   test_eq_ptr(e_hash, get_id_hash(line));
 
@@ -327,11 +324,8 @@ test_consdiff_is_valid_router_entry(void)
    * properly. */
 
   test_eq(0, is_valid_router_entry("r name"));
-  test_eq(0, is_valid_router_entry("r name hash etc"));
-  test_eq(0, is_valid_router_entry(
-        "r name hash_longer_than_27_chars_but_isnt_base64 etc"));
-  test_eq(1, is_valid_router_entry(
-        "r name hash+longer+than+27+chars+and+valid+base64 etc"));
+  test_eq(0, is_valid_router_entry("r name _hash_isnt_base64 etc"));
+  test_eq(1, is_valid_router_entry("r name hash+valid+base64 etc"));
 
  done:
   ;
