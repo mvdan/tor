@@ -55,19 +55,6 @@ smartlist_slice(smartlist_t *list, int start, int end)
   return slice;
 }
 
-/** Like smartlist_string_pos, but limited to the bounds of the slice.
- */
-static int
-smartlist_slice_string_pos(smartlist_slice_t *slice, const char *string)
-{
-  int i, end = slice->offset + slice->len;
-  for (i = slice->offset; i < end; ++i) {
-    const char *el = smartlist_get(slice->list, i);
-    if (!strcmp(el, string)) return i;
-  }
-  return -1;
-}
-
 /** Helper: Compute the longest common substring lengths for the two slices.
  * Used as part of the diff generation to find the column at which to split
  * slice2 (divide and conquer) while still having the optimal solution.
@@ -142,6 +129,19 @@ trim_slices(smartlist_slice_t *slice1, smartlist_slice_t *slice2)
     i1--; slice1->len--;
     i2--; slice2->len--;
   }
+}
+
+/** Like smartlist_string_pos, but limited to the bounds of the slice.
+ */
+static int
+smartlist_slice_string_pos(smartlist_slice_t *slice, const char *string)
+{
+  int i, end = slice->offset + slice->len;
+  for (i = slice->offset; i < end; ++i) {
+    const char *el = smartlist_get(slice->list, i);
+    if (!strcmp(el, string)) return i;
+  }
+  return -1;
 }
 
 /** Helper: Set all the appropriate changed booleans to true. The first slice
@@ -277,7 +277,8 @@ get_id_hash(const char *r_line)
   hash++;
   hash_end = hash;
   /* Stop when the first non-base64 character is found. Use unsigned chars to
-   * avoid negative indexes causing crashes. */
+   * avoid negative indexes causing crashes.
+   */
   while (base64_compare_table[*((unsigned char*)hash_end)] != X)
     hash_end++;
 
@@ -360,7 +361,8 @@ base64cmp(const char *hash1, const char *hash2)
 
 /** Given a list of strings in <b>lst</b>, set the SHA256 digest at
  * <b>digest_out</b> to the hash of the concatenation of those strings, plus
- * the optional string <b>end</b> to be added after each string. */
+ * the optional string <b>end</b> to be added after each string.
+ */
 static void
 crypto_digest_smartlist_ends(char *digest_out, const smartlist_t *lst,
                              const char *end)
@@ -398,6 +400,10 @@ gen_ed_diff(smartlist_t *cons1, smartlist_t *cons2)
   int len1 = smartlist_len(cons1);
   int len2 = smartlist_len(cons2);
   smartlist_t *result = smartlist_new();
+
+  /* Initialize the changed bitarrays to zero, so that calc_changes only needs
+   * to set the ones that matter and leave the rest untouched.
+   */
   bitarray_t *changed1 = bitarray_init_zero(len1);
   bitarray_t *changed2 = bitarray_init_zero(len2);
   int i1=-1, i2=-1;
@@ -453,7 +459,8 @@ gen_ed_diff(smartlist_t *cons1, smartlist_t *cons2)
     }
 
     /* If we have reached the end of both consensuses, there is no need to
-     * compare hashes anymore, since this is the last iteration. */
+     * compare hashes anymore, since this is the last iteration.
+     */
     if (i1 < len1 || i2 < len2) {
 
       /* Keep on advancing the lower (by identity hash sorting) position until
@@ -470,7 +477,8 @@ gen_ed_diff(smartlist_t *cons1, smartlist_t *cons2)
           i1 = next_router(cons1, i1);
           if (i1 == len1) {
             /* We finished the first consensus, so grab all the remaining
-             * lines of the second consensus and finish up. */
+             * lines of the second consensus and finish up.
+             */
             i2 = len2;
             break;
           }
@@ -487,7 +495,8 @@ gen_ed_diff(smartlist_t *cons1, smartlist_t *cons2)
           i2 = next_router(cons2, i2);
           if (i2 == len2) {
             /* We finished the second consensus, so grab all the remaining
-             * lines of the first consensus and finish up. */
+             * lines of the first consensus and finish up.
+             */
             i1 = len1;
             break;
           }
@@ -673,8 +682,9 @@ apply_ed_diff(smartlist_t *cons1, smartlist_t *diff)
       while (--j >= start) ;
     }
 
-    /** Add new lines.
-     * In reverse order, since it will all be reversed at the end. */
+    /* Add new lines in reverse order, since it will all be reversed at the
+     * end.
+     */
     if (action == 'a' || action == 'c') {
       int added_i, added_end = i;
 
@@ -820,7 +830,8 @@ consdiff_apply_diff(smartlist_t *cons1, smartlist_t *diff)
   /* Expected hashes as found in the consensus diff header. They must be of
    * length HEX_DIGEST256_LEN, normally 64 hexadecimal characters.
    * If any of the decodings fail, error to make sure that the hashes are
-   * proper base16-encoded SHA256 digests. */
+   * proper base16-encoded SHA256 digests.
+   */
   e_cons1_hash_hex = smartlist_get(hash_words, 1);
   e_cons2_hash_hex = smartlist_get(hash_words, 2);
   if (strlen(e_cons1_hash_hex) != HEX_DIGEST256_LEN ||
@@ -847,7 +858,8 @@ consdiff_apply_diff(smartlist_t *cons1, smartlist_t *diff)
 
   /* Grab the ed diff and calculate the resulting consensus. */
   /* To avoid copying memory or iterating over all the elements, make a
-   * read-only smartlist without the two header lines. */
+   * read-only smartlist without the two header lines.
+   */
   ed_diff = tor_malloc(sizeof(smartlist_t));
   ed_diff->list = diff->list+2;
   ed_diff->num_used = diff->num_used-2;
