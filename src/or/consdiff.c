@@ -184,16 +184,10 @@ calc_changes(smartlist_slice_t *slice1, smartlist_slice_t *slice2,
 {
   trim_slices(slice1, slice2);
 
-  if (slice1->len == 0) {
+  if (slice1->len <= 1) {
     set_changed(changed1, changed2, slice1, slice2);
 
-  } else if (slice2->len == 0) {
-    set_changed(changed2, changed1, slice2, slice1);
-
-  } else if (slice1->len == 1) {
-    set_changed(changed1, changed2, slice1, slice2);
-
-  } else if (slice2->len == 1) {
+  } else if (slice2->len <= 1) {
     set_changed(changed2, changed1, slice2, slice1);
 
   /* Keep on splitting the slices in two. */
