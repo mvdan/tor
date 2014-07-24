@@ -2,7 +2,6 @@
  * Copyright (c) 2014, The Tor Project, Inc. */
 /* See LICENSE for licensing information */
 
-#include "orconfig.h"
 #include "or.h"
 #include "test.h"
 
