@@ -5,7 +5,7 @@
 #ifndef TOR_CONSDIFF_H
 #define TOR_CONSDIFF_H
 
-#include "container.h"
+#include "or.h"
 
 /** Data structure to define a slice of a smarltist. */
 typedef struct {
