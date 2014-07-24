@@ -350,6 +350,18 @@ crypto_digest_smartlist_ends(char *digest_out, const smartlist_t *lst,
  * smartlists. Will return NULL if the diff could not be generated, which can
  * happen if any lines the script had to add matched "." or if the routers
  * were not properly ordered.
+ *
+ * This implementation is consensus-specific. To generate an ed diff for any
+ * given input in quadratic time, you can replace all the code until the
+ * navigation in reverse order with the following:
+ *
+ *   int len1 = smartlist_len(cons1);
+ *   int len2 = smartlist_len(cons2);
+ *   bitarray_t *changed1 = bitarray_init_zero(len1);
+ *   bitarray_t *changed2 = bitarray_init_zero(len2);
+ *   cons1_sl = smartlist_slice(cons1, 0, -1);
+ *   cons2_sl = smartlist_slice(cons2, 0, -1);
+ *   calc_changes(cons1_sl, cons2_sl, changed1, changed2);
  */
 static smartlist_t *
 gen_ed_diff(smartlist_t *cons1, smartlist_t *cons2)
@@ -532,8 +544,8 @@ gen_ed_diff(smartlist_t *cons1, smartlist_t *cons2)
       for (i = start2; i <= end2; ++i) {
         const char *line = smartlist_get(cons2, i);
         if (!strcmp(line, ".")) {
-          log_warn(LD_GENERAL, "Cannot generate ed diff because "
-              "one of the lines is \".\".");
+          log_warn(LD_GENERAL, "Cannot generate consensus diff because "
+              "one of the lines to be added is \".\".");
           goto error_cleanup;
         }
         smartlist_add(result, tor_strdup(line));
@@ -580,7 +592,7 @@ apply_ed_diff(smartlist_t *cons1, smartlist_t *diff)
 
     /* Missing range start. */
     if (endptr1 == diff_line) {
-      log_warn(LD_GENERAL, "Could not apply ed diff because "
+      log_warn(LD_GENERAL, "Could not apply consensus diff because "
           "an ed command was missing a line number.");
       goto error_cleanup;
     }
@@ -590,13 +602,13 @@ apply_ed_diff(smartlist_t *cons1, smartlist_t *diff)
         end = (int)strtol(endptr1+1, &endptr2, LINE_BASE);
         if (endptr2 == endptr1+1) {
           goto error_cleanup;
-          log_warn(LD_GENERAL, "Could not apply ed diff because "
+          log_warn(LD_GENERAL, "Could not apply consensu diff because "
               "an ed command was missing a range end line number.");
         }
         /* Incoherent range. */
         if (end <= start) {
           goto error_cleanup;
-          log_warn(LD_GENERAL, "Could not apply ed diff because "
+          log_warn(LD_GENERAL, "Could not apply consensus diff because "
               "an invalid range was found in an ed command.");
         }
 
@@ -608,14 +620,14 @@ apply_ed_diff(smartlist_t *cons1, smartlist_t *diff)
 
     /* The diff is not in reverse order. */
     if (end > j) {
-      log_warn(LD_GENERAL, "Could not apply ed diff because "
+      log_warn(LD_GENERAL, "Could not apply consensus diff because "
           "its commands are not properly sorted in reverse order.");
       goto error_cleanup;
     }
 
     /* Action is longer than one char. */
     if (*(endptr2+1) != '\0') {
-      log_warn(LD_GENERAL, "Could not apply ed diff because "
+      log_warn(LD_GENERAL, "Could not apply consensus diff because "
           "an ed command longer than one char was found.");
       goto error_cleanup;
     }
@@ -628,7 +640,7 @@ apply_ed_diff(smartlist_t *cons1, smartlist_t *diff)
       case 'd':
         break;
       default:
-        log_warn(LD_GENERAL, "Could not apply ed diff because "
+        log_warn(LD_GENERAL, "Could not apply consensus diff because "
             "an unrecognised ed command was found.");
         goto error_cleanup;
     }
@@ -654,7 +666,7 @@ apply_ed_diff(smartlist_t *cons1, smartlist_t *diff)
       while (i < diff_len) {
         if (!strcmp(smartlist_get(diff, i), ".")) break;
         if (++i == diff_len) {
-          log_warn(LD_GENERAL, "Could not apply ed diff because "
+          log_warn(LD_GENERAL, "Could not apply consensus diff because "
               "it has lines to be inserted that don't end with a \".\".");
           goto error_cleanup;
         }
@@ -664,7 +676,7 @@ apply_ed_diff(smartlist_t *cons1, smartlist_t *diff)
 
       /* It would make no sense to add zero new lines. */
       if (added_i == added_end) {
-        log_warn(LD_GENERAL, "Could not apply ed diff because "
+        log_warn(LD_GENERAL, "Could not apply consensus diff because "
             "it has an ed command that tries to insert zero lines.");
         goto error_cleanup;
       }
@@ -710,16 +722,27 @@ consdiff_gen_diff(smartlist_t *cons1, smartlist_t *cons2)
   char cons2_hash_hex[HEX_DIGEST256_LEN+1];
 
   ed_diff = gen_ed_diff(cons1, cons2);
-  /* See if the script could be generated. */
+  /* ed diff could not be generated - reason already logged by gen_ed_diff. */
   if (ed_diff == NULL) return NULL;
 
   /* See that the script actually produces what we want. */
   ed_cons2 = apply_ed_diff(cons1, ed_diff);
-  if (!ed_cons2) return NULL;
+  if (!ed_cons2) {
+    log_warn(LD_GENERAL, "Refusing to generate consensus diff because "
+        "the generated ed diff could not be tested to successfully generate "
+        "the target consensus.");
+    return NULL;
+  }
+
   cons2_eq = smartlist_strings_eq(cons2, ed_cons2);
   SMARTLIST_FOREACH(ed_cons2, char*, line, tor_free(line));
   smartlist_free(ed_cons2);
-  if (!cons2_eq) return NULL;
+  if (!cons2_eq) {
+    log_warn(LD_GENERAL, "Refusing to generate consensus diff because "
+        "the generated ed diff did not generate the target consensus "
+        "successfully when tested.");
+    return NULL;
+  }
 
   /* Calculate the digests. */
   crypto_digest_smartlist_ends(cons1_hash, cons1, "\n");
