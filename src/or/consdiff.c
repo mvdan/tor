@@ -55,15 +55,16 @@ smartlist_slice(smartlist_t *list, int start, int end)
   return slice;
 }
 
-/** Helper: Compute the longest common substring lengths for the two slices.
+/** Helper: Compute the longest common subsequence lengths for the two slices.
  * Used as part of the diff generation to find the column at which to split
- * slice2 (divide and conquer) while still having the optimal solution.
+ * slice2 while still having the optimal solution.
  * If direction is -1, the navigation is reversed. Otherwise it must be 1.
  * The length of the resulting integer array is that of the second slice plus
  * one.
  */
 static int *
-lcs_lens(smartlist_slice_t *slice1, smartlist_slice_t *slice2, int direction)
+lcs_lengths(smartlist_slice_t *slice1, smartlist_slice_t *slice2,
+            int direction)
 {
   int i, j, si, sj;
   size_t a_size = sizeof(int) * (slice2->len+1);
@@ -166,6 +167,34 @@ set_changed(bitarray_t *changed1, bitarray_t *changed2,
     if (i != toskip) bitarray_set(changed2, i);
 }
 
+/*
+ * Helper: Given that slice1 has been split by half into top and bot, we want
+ * to fetch the column at which to split slice2 so that we are still on track
+ * to the optimal diff solution, i.e. the shortest one. We use lcs_lengths
+ * since the shortest diff is just another way to say the longest common
+ * subsequence.
+ */
+static int
+optimal_column_to_split(smartlist_slice_t *top, smartlist_slice_t *bot,
+                        smartlist_slice_t *slice2)
+{
+  int *lens_top = lcs_lengths(top, slice2, 1);
+  int *lens_bot = lcs_lengths(bot, slice2, -1);
+  int i, column=0, max_sum=-1;
+
+  for (i = 0; i < slice2->len+1; ++i) {
+    int sum = lens_top[i] + lens_bot[slice2->len-i];
+    if (sum > max_sum) {
+      column = i;
+      max_sum = sum;
+    }
+  }
+  tor_free(lens_top);
+  tor_free(lens_bot);
+
+  return column;
+}
+
 /**
  * Helper: Figure out what elements are new or gone on the second smartlist
  * relative to the first smartlist, and store the booleans in the bitarrays.
@@ -193,7 +222,7 @@ calc_changes(smartlist_slice_t *slice1, smartlist_slice_t *slice2,
   /* Keep on splitting the slices in two. */
   } else {
 
-    int mid, *lens_top, *lens_bot, i, k, max_sum;
+    int mid, mid2;
     smartlist_slice_t *top, *bot, *left, *right;
 
     /* Split the first slice in half. */
@@ -202,25 +231,10 @@ calc_changes(smartlist_slice_t *slice1, smartlist_slice_t *slice2,
     bot = smartlist_slice(slice1->list, slice1->offset+mid,
         slice1->offset+slice1->len);
 
-    /* 'k' will be the column that we find is optimal thanks to the lcs
-     * lengths that lcs_lens reported.
-     */
-    lens_top = lcs_lens(top, slice2, 1);
-    lens_bot = lcs_lens(bot, slice2, -1);
-    k=0, max_sum=-1;
-    for (i = 0; i < slice2->len+1; ++i) {
-      int sum = lens_top[i] + lens_bot[slice2->len-i];
-      if (sum > max_sum) {
-        k = i;
-        max_sum = sum;
-      }
-    }
-    tor_free(lens_top);
-    tor_free(lens_bot);
-
-    /* Split the second slice by the column 'k'. */
-    left = smartlist_slice(slice2->list, slice2->offset, slice2->offset+k);
-    right = smartlist_slice(slice2->list, slice2->offset+k,
+    /* Split the second slice by the optimal column. */
+    mid2 = optimal_column_to_split(top, bot, slice2);
+    left = smartlist_slice(slice2->list, slice2->offset, slice2->offset+mid2);
+    right = smartlist_slice(slice2->list, slice2->offset+mid2,
         slice2->offset+slice2->len);
 
     calc_changes(top, left, changed1, changed2);
