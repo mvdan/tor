@@ -59,16 +59,16 @@ test_consdiff_smartlist_slice_string_pos(void)
 }
 
 static void
-test_consdiff_lcs_lens(void)
+test_consdiff_lcs_lengths(void)
 {
   smartlist_t *sl1 = smartlist_new();
   smartlist_t *sl2 = smartlist_new();
   smartlist_slice_t *sls1, *sls2;
-  int *lens1, *lens2;
+  int *lengths1, *lengths2;
 
   /* Expected lcs lengths in regular and reverse order. */
-  int e_lens1[] = { 0, 1, 2, 3, 3, 4 };
-  int e_lens2[] = { 0, 1, 1, 2, 3, 4 };
+  int e_lengths1[] = { 0, 1, 2, 3, 3, 4 };
+  int e_lengths2[] = { 0, 1, 1, 2, 3, 4 };
 
   smartlist_split_string(sl1, "a:b:c:d:e", ":", 0, 0);
   smartlist_split_string(sl2, "a:c:d:i:e", ":", 0, 0);
@@ -76,14 +76,14 @@ test_consdiff_lcs_lens(void)
   sls1 = smartlist_slice(sl1, 0, -1);
   sls2 = smartlist_slice(sl2, 0, -1);
 
-  lens1 = lcs_lens(sls1, sls2, 1);
-  lens2 = lcs_lens(sls1, sls2, -1);
-  test_memeq(e_lens1, lens1, sizeof(int) * 6);
-  test_memeq(e_lens2, lens2, sizeof(int) * 6);
+  lengths1 = lcs_lengths(sls1, sls2, 1);
+  lengths2 = lcs_lengths(sls1, sls2, -1);
+  test_memeq(e_lengths1, lengths1, sizeof(int) * 6);
+  test_memeq(e_lengths2, lengths2, sizeof(int) * 6);
 
  done:
-  tor_free(lens1);
-  tor_free(lens2);
+  tor_free(lengths1);
+  tor_free(lengths2);
   tor_free(sls1);
   tor_free(sls2);
   if (sl1) SMARTLIST_FOREACH(sl1, char*, line, tor_free(line));
@@ -932,7 +932,7 @@ test_consdiff_apply_diff(void)
 struct testcase_t consdiff_tests[] = {
   CONSDIFF_LEGACY(smartlist_slice),
   CONSDIFF_LEGACY(smartlist_slice_string_pos),
-  CONSDIFF_LEGACY(lcs_lens),
+  CONSDIFF_LEGACY(lcs_lengths),
   CONSDIFF_LEGACY(trim_slices),
   CONSDIFF_LEGACY(set_changed),
   CONSDIFF_LEGACY(calc_changes),
