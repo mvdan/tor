@@ -6,6 +6,28 @@
  * \file consdiff.c
  * \brief Consensus diff implementation, including both the generation and the
  * application of diffs in a minimal ed format.
+ *
+ * The consensus diff application is done in consdiff_apply_diff, which relies
+ * on apply_ed_diff for the main ed diff part and on some digest helper
+ * functions to check the digest hashes found in the consensus diff header.
+ *
+ * The consensus diff generation is more complex. consdiff_gen_diff generates
+ * it, relying on gen_ed_diff to generate the ed diff and some digest helper
+ * functions to generate the digest hashes.
+ *
+ * gen_ed_diff is the tricky bit. In it simplest form, it will take quadratic
+ * time and linear space to generate an ed diff given two smartlists. As shown
+ * in its comment section, calling calc_changes on the entire two consensuses
+ * will calculate what is to be added and what is to be deleted in the diff.
+ * Its comment section briefly explains how it works.
+ *
+ * In our case specific to consensuses, we take advantage of the fact that
+ * consensuses list routers sorted by their identities. We use that
+ * information to avoid running calc_changes on the whole smartlists.
+ * gen_ed_diff will navigate through the two consensuses identity by identity
+ * and will send small couples of slices to calc_changes, keeping the running
+ * time near-linear. This is explained in more detail in the gen_ed_diff
+ * comments.
  **/
 
 #include "or.h"
@@ -145,13 +167,16 @@ set_changed(bitarray_t *changed1, bitarray_t *changed2,
 }
 
 /**
- * Helper: Work out all the changed booleans for all the lines in the two
- * slices, saving them in the corresponding changed arrays. This recursive
- * function will keep on splitting slice1 by half and splitting up slice2 by
- * the column that lcs_lens deems appropriate. Once any of the two slices gets
- * small enough, set_changed will be used to finally store that portion of the
- * result. It is assumed that the lengths of the changed bitarrays match those
- * of their full consensus smartlists.
+ * Helper: Figure out what elements are new or gone on the second smartlist
+ * relative to the first smartlist, and store the booleans in the bitarrays.
+ * True on the first bitarray means the element is gone, true on the second
+ * bitarray means it's new.
+ *
+ * In its base case, either of the smartlists is of length <= 1 and we can
+ * quickly see what elements are new or are gone. In the other case, we will
+ * split one smartlist by half and we'll use optimal_column_to_split to find
+ * the optimal column at which to split the second smartlist so that we are
+ * finding the smallest diff possible.
  */
 static void
 calc_changes(smartlist_slice_t *slice1, smartlist_slice_t *slice2,
@@ -587,10 +612,7 @@ apply_ed_diff(smartlist_t *cons1, smartlist_t *diff)
     int start, end;
     char action;
 
-#define LINE_BASE 10
-    start = (int)strtol(diff_line, &endptr1, LINE_BASE);
-
-    /* Missing range start. */
+    start = (int)strtol(diff_line, &endptr1, 10);
     if (endptr1 == diff_line) {
       log_warn(LD_GENERAL, "Could not apply consensus diff because "
           "an ed command was missing a line number.");
@@ -599,7 +621,7 @@ apply_ed_diff(smartlist_t *cons1, smartlist_t *diff)
 
     /* Two-item range */
     if (*endptr1 == ',') {
-        end = (int)strtol(endptr1+1, &endptr2, LINE_BASE);
+        end = (int)strtol(endptr1+1, &endptr2, 10);
         if (endptr2 == endptr1+1) {
           goto error_cleanup;
           log_warn(LD_GENERAL, "Could not apply consensu diff because "
@@ -618,14 +640,12 @@ apply_ed_diff(smartlist_t *cons1, smartlist_t *diff)
         end = start;
     }
 
-    /* The diff is not in reverse order. */
     if (end > j) {
       log_warn(LD_GENERAL, "Could not apply consensus diff because "
           "its commands are not properly sorted in reverse order.");
       goto error_cleanup;
     }
 
-    /* Action is longer than one char. */
     if (*(endptr2+1) != '\0') {
       log_warn(LD_GENERAL, "Could not apply consensus diff because "
           "an ed command longer than one char was found.");
@@ -844,8 +864,8 @@ consdiff_apply_diff(smartlist_t *cons1, smartlist_t *diff)
   /* ed diff could not be applied - reason already logged by apply_ed_diff. */
   if (cons2 == NULL) goto error_cleanup;
 
+  /* See that the resulting consensus matches its hash. */
   crypto_digest_smartlist_ends(cons2_hash, cons2, "\n");
-  /* The resulting consensus doesn't match its hash. */
   if (memcmp(cons2_hash, e_cons2_hash, DIGEST256_LEN*sizeof(char)) != 0) {
     log_warn(LD_GENERAL, "Refusing to apply consensus diff because "
         "the resulting consensus doesn't match its own digest as found in "
