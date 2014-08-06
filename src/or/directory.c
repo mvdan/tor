@@ -1175,17 +1175,20 @@ directory_send_command(dir_connection_t *conn,
 
   switch (purpose) {
     case DIR_PURPOSE_FETCH_CONSENSUS: {
-      smartlist_t *hashes;
       char *flavname = conn->requested_resource;
-      hashes = networkstatus_list_stored_consensuses(flavname);
-      if (smartlist_len(hashes) > 0) {
-        char *hashes_str = smartlist_join_strings(hashes, " ", 1, NULL);
-        smartlist_add_asprintf(headers, "X-Or-Diff-From-Consensus: %s\r\n",
-                               hashes_str);
-        SMARTLIST_FOREACH(hashes, char *, cp, tor_free(cp));
-        tor_free(hashes_str);
+      char digest_hex[HEX_DIGEST256_LEN+1];
+      networkstatus_t *c;
+      if (!strcmp(flavname, "microdesc")) {
+        c = networkstatus_get_latest_consensus_by_flavor(FLAV_MICRODESC);
+      } else {
+        c = networkstatus_get_latest_consensus_by_flavor(FLAV_NS);
       }
-      smartlist_free(hashes);
+      if (c) {
+        base16_encode(digest_hex, HEX_DIGEST256_LEN+1,
+                      c->digests.d[DIGEST_SHA256], DIGEST256_LEN);
+        smartlist_add_asprintf(headers, "X-Or-Diff-From-Consensus: %s\r\n",
+                               digest_hex);
+      }
       /* resource is optional.  If present, it's a flavor name */
       tor_assert(!payload);
       httpcommand = "GET";
@@ -1773,17 +1776,24 @@ connection_dir_client_reached_eof(dir_connection_t *conn)
       if (consdiff_get_digests(body_lines,
                                NULL, base_consensus_digest_hex,
                                NULL, consensus_digest_hex) == 0) {
-        base_consensus = networkstatus_get_stored_consensus(
-            flavname, base_consensus_digest_hex);
-        if (!base_consensus) {
+        tor_mmap_t *cons_mmap;
+        if (!strcmp(flavname, "microdesc")) {
+          cons_mmap = networkstatus_get_latest_consensus_mmap_by_flavor(
+              FLAV_MICRODESC);
+        } else {
+          cons_mmap = networkstatus_get_latest_consensus_mmap_by_flavor(
+              FLAV_NS);
+        }
+        if (!cons_mmap) {
           log_warn(LD_DIR,
-              "Received a consensus applying to a consensus that we "
-              "don't have: %s", base_consensus_digest_hex);
+              "Could not fetch the memory mapped consensus to apply "
+              "the consensus diff to.");
           tor_free(body_dup); smartlist_free(body_lines);
           tor_free(body); tor_free(headers); tor_free(reason);
           networkstatus_consensus_download_failed(0, flavname);
           return -1;
         }
+        base_consensus = tor_strndup(cons_mmap->data, cons_mmap->size);
         base_consensus_lines = smartlist_new();
         tor_split_lines(base_consensus_lines, base_consensus,
             (int)strlen(base_consensus));
@@ -1812,17 +1822,6 @@ connection_dir_client_reached_eof(dir_connection_t *conn)
       log_info(LD_DIR,"Received consensus directory (size %d) "
                "from server '%s:%d'",
                (int)body_len, conn->base_.address, conn->base_.port);
-    }
-    if (networkstatus_update_consensus_diffs(consensus, flavname)<0) {
-      log_warn(LD_DIR, "Unable to update the stored consensus diffs.");
-      tor_free(consensus); tor_free(headers); tor_free(reason);
-      networkstatus_consensus_download_failed(0, flavname);
-      return -1;
-    }
-    if (networkstatus_store_consensus(consensus, flavname,
-                                      consensus_digest_hex)<0) {
-      log_warn(LD_DIR, "Unable to store fetched consensus "
-               "for future diff purposes.");
     }
     if ((r=networkstatus_set_current_consensus(consensus, flavname, 0))<0) {
       log_fn(r<-1?LOG_WARN:LOG_INFO, LD_DIR,

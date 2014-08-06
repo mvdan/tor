@@ -57,6 +57,11 @@ static networkstatus_t *current_ns_consensus = NULL;
  * network status. */
 static networkstatus_t *current_md_consensus = NULL;
 
+/** Same as above, but memory mapped from their files to fetch the full
+ * strings later on. */
+static tor_mmap_t *current_ns_consensus_mmap = NULL;
+static tor_mmap_t *current_md_consensus_mmap = NULL;
+
 /** A v3 consensus networkstatus that we've received, but which we don't
  * have enough certificates to be happy about. */
 typedef struct consensus_waiting_for_certs_t {
@@ -1002,6 +1007,21 @@ networkstatus_get_latest_consensus_by_flavor(consensus_flavor_t f)
   }
 }
 
+/** Return the latest consensus memory mapping we have whose flavor matches
+ * <b>f</b>, or NULL if we don't have one. */
+tor_mmap_t *
+networkstatus_get_latest_consensus_mmap_by_flavor(consensus_flavor_t f)
+{
+  if (f == FLAV_NS)
+    return current_ns_consensus_mmap;
+  else if (f == FLAV_MICRODESC)
+    return current_md_consensus_mmap;
+  else {
+    tor_assert(0);
+    return NULL;
+  }
+}
+
 /** Return the most recent consensus that we have downloaded, or NULL if it is
  * no longer live. */
 networkstatus_t *
@@ -1123,128 +1143,6 @@ networkstatus_copy_old_consensus_info(networkstatus_t *new_c,
       memcpy(&rs_new->dl_status, &rs_old->dl_status,sizeof(download_status_t));
     }
   } SMARTLIST_FOREACH_JOIN_END(rs_old, rs_new);
-}
-
-char *
-networkstatus_get_stored_consensus(const char *flavor,
-                                   const char *digest)
-{
-  char *consensus_fname, flavdir[64], *consensus;
-  tor_snprintf(flavdir, sizeof(flavdir),
-               "stored-consensuses-%s", flavor);
-  consensus_fname = get_datadir_fname2(flavdir, digest);
-  consensus = read_file_to_str(consensus_fname, 0, NULL);
-  tor_free(consensus_fname);
-  return consensus;
-}
-
-smartlist_t *
-networkstatus_list_stored_consensuses(const char *flavor)
-{
-  char *consensuses_fname, flavdir[64];
-  smartlist_t *result;
-  tor_snprintf(flavdir, sizeof(flavdir),
-               "stored-consensuses-%s", flavor);
-  consensuses_fname = get_datadir_fname(flavdir);
-  result = tor_listdir(consensuses_fname);
-  tor_free(consensuses_fname);
-  if (result == NULL) {
-    return smartlist_new();
-  }
-  return result;
-}
-
-int
-networkstatus_store_consensus(const char *consensus,
-                              const char *flavor,
-                              const char *digest)
-{
-  char *consensus_fname, flavdir[64];
-  int r;
-  tor_snprintf(flavdir, sizeof(flavdir),
-               "stored-consensuses-%s", flavor);
-  if (check_or_create_data_subdir(flavdir) != 0) return -1;
-  consensus_fname = get_datadir_fname2(flavdir, digest);
-  r = write_str_to_file(consensus_fname, consensus, 0);
-  tor_free(consensus_fname);
-  return r;
-}
-
-int
-networkstatus_store_consensus_diff(const char *consensus_diff,
-                                   const char *flavor,
-                                   const char *digest)
-{
-  char flavdir_diff[64], *consensus_diff_fname;
-  int r;
-
-  tor_snprintf(flavdir_diff, sizeof(flavdir_diff),
-               "stored-consensus-diffs-%s", flavor);
-  if (check_or_create_data_subdir(flavdir_diff) != 0) return -1;
-
-  consensus_diff_fname = get_datadir_fname2(flavdir_diff, digest);
-  r = write_str_to_file(consensus_diff_fname, consensus_diff, 0);
-  tor_free(consensus_diff_fname);
-  return r;
-}
-
-int
-networkstatus_update_consensus_diffs(const char *cur_consensus,
-                                     const char *flavor)
-{
-  char flavdir[64];
-  char *cur_consensus_dup;
-  int r = 0;
-  smartlist_t *cur_consensus_sl, *stored_consensus_sl, *diff_sl;
-  smartlist_t *stored_consensuses_digests;
-
-  cur_consensus_dup = tor_strdup(cur_consensus);
-  cur_consensus_sl = smartlist_new();
-  tor_split_lines(cur_consensus_sl, cur_consensus_dup,
-      (int)strlen(cur_consensus_dup));
-
-  tor_snprintf(flavdir, sizeof(flavdir),
-               "stored-consensuses-%s", flavor);
-
-  stored_consensuses_digests =
-    networkstatus_list_stored_consensuses(flavor);
-
-  SMARTLIST_FOREACH_BEGIN(stored_consensuses_digests,
-                          const char *, digest) {
-
-    char *consensus_fname = get_datadir_fname2(flavdir, digest);
-    char *stored_consensus = read_file_to_str(consensus_fname, 0, NULL);
-    char *diff;
-    tor_free(consensus_fname);
-
-    stored_consensus_sl = smartlist_new();
-    tor_split_lines(stored_consensus_sl, stored_consensus,
-        (int)strlen(stored_consensus));
-
-    diff_sl = consdiff_gen_diff(stored_consensus_sl, cur_consensus_sl);
-    smartlist_free(stored_consensus_sl);
-    tor_free(stored_consensus);
-
-    if (!diff_sl) {
-      r = -1;
-      break;
-    }
-    diff = smartlist_join_strings(diff_sl, "\n", 0, NULL);
-    SMARTLIST_FOREACH(diff_sl, char *, cp, tor_free(cp));
-    smartlist_free(diff_sl);
-
-    r = networkstatus_store_consensus_diff(diff, flavor, digest);
-    tor_free(diff);
-    if (r<0) break;
-
-  } SMARTLIST_FOREACH_END(digest);
-
-  SMARTLIST_FOREACH(stored_consensuses_digests, char *, cp, tor_free(cp));
-  smartlist_free(stored_consensuses_digests);
-  tor_free(cur_consensus_dup);
-  smartlist_free(cur_consensus_sl);
-
-  return r;
 }
 
 /** Try to replace the current cached v3 networkstatus with the one in
@@ -1510,6 +1408,7 @@ networkstatus_set_current_consensus(const char *consensus,
   }
 
   if (directory_caches_dir_info(options)) {
+    dirserv_update_consensus_diffs(consensus, flavor);
     dirserv_set_cached_consensus_networkstatus(consensus,
                                                flavor,
                                                &c->digests,
@@ -1518,6 +1417,19 @@ networkstatus_set_current_consensus(const char *consensus,
 
   if (!from_cache) {
     write_str_to_file(consensus_fname, consensus, 0);
+    if (!strcmp(flavor, "ns")) {
+      if (tor_munmap_file(current_ns_consensus_mmap)) {
+        log_warn(LD_FS, "Failed to munmap the cached consensus file. "
+            "Probably about to leak memory.");
+      }
+      current_ns_consensus_mmap = tor_mmap_file(consensus_fname);
+    } else if (!strcmp(flavor, "microdesc")) {
+      if (tor_munmap_file(current_md_consensus_mmap)) {
+        log_warn(LD_FS, "Failed to munmap the cached consensus file. "
+            "Probably about to leak memory.");
+      }
+      current_md_consensus_mmap = tor_mmap_file(consensus_fname);
+    }
   }
 
 /** If a consensus appears more than this many seconds before its declared

@@ -62,6 +62,8 @@ int client_would_use_router(const routerstatus_t *rs, time_t now,
 networkstatus_t *networkstatus_get_latest_consensus(void);
 networkstatus_t *networkstatus_get_latest_consensus_by_flavor(
                                                   consensus_flavor_t f);
+tor_mmap_t *networkstatus_get_latest_consensus_mmap_by_flavor(
+                                                  consensus_flavor_t f);
 networkstatus_t *networkstatus_get_live_consensus(time_t now);
 networkstatus_t *networkstatus_get_reasonably_live_consensus(time_t now,
                                                              int flavor);
@@ -73,22 +75,6 @@ networkstatus_t *networkstatus_get_reasonably_live_consensus(time_t now,
 int networkstatus_set_current_consensus(const char *consensus,
                                         const char *flavor,
                                         unsigned flags);
-char *
-networkstatus_get_stored_consensus(const char *flavor,
-                                   const char *digest);
-smartlist_t *
-networkstatus_list_stored_consensuses(const char *flavor);
-int
-networkstatus_store_consensus(const char *consensus,
-                              const char *flavor,
-                              const char *digest);
-int
-networkstatus_store_consensus_diff(const char *consensus_diff,
-                                   const char *flavor,
-                                   const char *digest);
-int
-networkstatus_update_consensus_diffs(const char *cur_consensus,
-                                     const char *flavor);
 void networkstatus_note_certs_arrived(void);
 void routers_update_all_from_networkstatus(time_t now, int dir_version);
 void routers_update_status_from_consensus_networkstatus(smartlist_t *routers,

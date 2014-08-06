@@ -63,6 +63,15 @@ int directory_too_idle_to_fetch_descriptors(const or_options_t *options,
                                             time_t now);
 
 cached_dir_t *dirserv_get_consensus(const char *flavor_name);
+char * dirserv_get_stored_consensus(const char *flavor, const char *digest);
+smartlist_t * dirserv_list_stored_consensuses(const char *flavor);
+int dirserv_store_consensus(const char *consensus, const char *flavor,
+                            const char *digest);
+int dirserv_store_consensus_diff(const char *consensus_diff,
+                                 const char *flavor,
+                                 const char *digest);
+int dirserv_update_consensus_diffs(const char *cur_consensus,
+                                   const char *flavor);
 void dirserv_set_cached_consensus_networkstatus(const char *consensus,
                                                 const char *flavor_name,
                                                 const digests_t *digests,
