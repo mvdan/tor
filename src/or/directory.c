@@ -9,6 +9,7 @@
 #include "config.h"
 #include "connection.h"
 #include "connection_edge.h"
+#include "consdiff.h"
 #include "control.h"
 #include "directory.h"
 #include "dirserv.h"
@@ -1173,7 +1174,18 @@ directory_send_command(dir_connection_t *conn,
   }
 
   switch (purpose) {
-    case DIR_PURPOSE_FETCH_CONSENSUS:
+    case DIR_PURPOSE_FETCH_CONSENSUS: {
+      smartlist_t *hashes;
+      char *flavname = conn->requested_resource;
+      hashes = networkstatus_list_stored_consensuses(flavname);
+      if (smartlist_len(hashes) > 0) {
+        char *hashes_str = smartlist_join_strings(hashes, " ", 1, NULL);
+        smartlist_add_asprintf(headers, "X-Or-Diff-From-Consensus: %s\r\n",
+                               hashes_str);
+        SMARTLIST_FOREACH(hashes, char *, cp, tor_free(cp));
+        tor_free(hashes_str);
+      }
+      smartlist_free(hashes);
       /* resource is optional.  If present, it's a flavor name */
       tor_assert(!payload);
       httpcommand = "GET";
@@ -1181,6 +1193,7 @@ directory_send_command(dir_connection_t *conn,
       log_info(LD_DIR, "Downloading consensus from %s using %s",
                hoststring, url);
       break;
+    }
     case DIR_PURPOSE_FETCH_CERTIFICATE:
       tor_assert(resource);
       tor_assert(!payload);
@@ -1736,6 +1749,8 @@ connection_dir_client_reached_eof(dir_connection_t *conn)
   if (conn->base_.purpose == DIR_PURPOSE_FETCH_CONSENSUS) {
     int r;
     const char *flavname = conn->requested_resource;
+    char *consensus, consensus_digest_hex[HEX_DIGEST256_LEN+1];
+    smartlist_t *diff_result = NULL;
     if (status_code != 200) {
       int severity = (status_code == 304) ? LOG_INFO : LOG_WARN;
       tor_log(severity, LD_DIR,
@@ -1747,14 +1762,48 @@ connection_dir_client_reached_eof(dir_connection_t *conn)
       networkstatus_consensus_download_failed(status_code, flavname);
       return -1;
     }
-    log_info(LD_DIR,"Received consensus directory (size %d) from server "
-             "'%s:%d'", (int)body_len, conn->base_.address, conn->base_.port);
-    if ((r=networkstatus_set_current_consensus(body, flavname, 0))<0) {
+    {
+      char *base_consensus, base_consensus_digest_hex[HEX_DIGEST256_LEN+1];
+      smartlist_t *base_consensus_lines, *body_lines;
+      body_lines = smartlist_new();
+      tor_split_lines(body_lines, tor_strdup(body), (int)body_len);
+      if (consdiff_get_digests(body_lines,
+                               NULL, base_consensus_digest_hex,
+                               NULL, consensus_digest_hex) == 0) {
+        base_consensus = networkstatus_get_stored_consensus(
+            flavname, base_consensus_digest_hex);
+        base_consensus_lines = smartlist_new();
+        tor_split_lines(base_consensus_lines, base_consensus,
+            (int)strlen(base_consensus));
+        diff_result = consdiff_apply_diff(base_consensus_lines, body_lines);
+      } else {
+        char consensus_digest[DIGEST256_LEN];
+        crypto_digest_t *d = crypto_digest256_new(DIGEST_SHA256);
+        crypto_digest_add_bytes(d, body, strlen(body));
+        crypto_digest_get_digest(d, consensus_digest, DIGEST256_LEN);
+        crypto_digest_free(d);
+        base16_encode(consensus_digest_hex, HEX_DIGEST256_LEN+1,
+                      consensus_digest, DIGEST256_LEN);
+      }
+    }
+    if (diff_result) {
+      consensus = smartlist_join_strings(diff_result, "\n", 1, NULL);
+      log_info(LD_DIR,"Received consensus directory diff (size %d) "
+               "from server '%s:%d'",
+               (int)body_len, conn->base_.address, conn->base_.port);
+    } else {
+      consensus = body;
+      log_info(LD_DIR,"Received consensus directory (size %d) "
+               "from server '%s:%d'",
+               (int)body_len, conn->base_.address, conn->base_.port);
+    }
+    networkstatus_store_consensus(consensus, flavname, consensus_digest_hex);
+    if ((r=networkstatus_set_current_consensus(consensus, flavname, 0))<0) {
       log_fn(r<-1?LOG_WARN:LOG_INFO, LD_DIR,
              "Unable to load %s consensus directory downloaded from "
              "server '%s:%d'. I'll try again soon.",
              flavname, conn->base_.address, conn->base_.port);
-      tor_free(body); tor_free(headers); tor_free(reason);
+      tor_free(consensus); tor_free(headers); tor_free(reason);
       networkstatus_consensus_download_failed(0, flavname);
       return -1;
     }
