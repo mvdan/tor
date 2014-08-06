@@ -13,6 +13,7 @@
 #include "command.h"
 #include "connection.h"
 #include "connection_or.h"
+#include "consdiff.h"
 #include "control.h"
 #include "directory.h"
 #include "dirserv.h"
@@ -96,6 +97,10 @@ typedef struct authdir_config_t {
 
 /** Should be static; exposed for testing. */
 static authdir_config_t *fingerprint_list = NULL;
+
+/** Maps HEX_SHA256 digests of old cached consensuses to their
+ * encapsulated info. */
+static strmap_t *old_cached_consensus_by_digest = NULL;
 
 /** Allocate and return a new, empty, authdir_config_t. */
 static authdir_config_t *
@@ -1182,6 +1187,232 @@ dirserv_get_consensus(const char *flavor_name)
   if (!cached_consensuses)
     return NULL;
   return strmap_get(cached_consensuses, flavor_name);
+}
+
+#define OLD_CACHED_CONS_DIRNAME "old-cached-consensuses"
+#define OLD_CACHED_CONS_DIFFS_DIRNAME "old-cached-consensus-diffs"
+
+/** Reads what old consensuses and diffs have we got cached on disk and
+ * updates old_cached_consensus_by_digest accordingly. */
+void
+dirserv_refresh_stored_consensuses()
+{
+  int i;
+  if (old_cached_consensus_by_digest) {
+    STRMAP_FOREACH(old_cached_consensus_by_digest, digest,
+                   old_cached_consensus_t *, c) {
+      tor_free(c);
+    } STRMAP_FOREACH_END;
+    strmap_free(old_cached_consensus_by_digest, NULL);
+  }
+  old_cached_consensus_by_digest = strmap_new();
+
+  for (i = 0; i < N_CONSENSUS_FLAVORS; ++i) {
+    char flavdir[64], *consensuses_fname;
+    char flavdir_diff[64];
+    const char *flavor = networkstatus_get_flavor_name(i);
+    smartlist_t *filelist;
+
+    tor_snprintf(flavdir, sizeof(flavdir),
+                 OLD_CACHED_CONS_DIRNAME"-%s", flavor);
+    tor_snprintf(flavdir_diff, sizeof(flavdir_diff),
+                 OLD_CACHED_CONS_DIFFS_DIRNAME"-%s", flavor);
+
+    consensuses_fname = get_datadir_fname(flavdir);
+    filelist = tor_listdir(consensuses_fname);
+    tor_free(consensuses_fname);
+    if (!filelist) continue;
+
+    SMARTLIST_FOREACH_BEGIN(filelist, const char *, name) {
+      smartlist_t *parts = smartlist_new();
+      int n = smartlist_split_string(parts, name, "-", 0, 0);
+      if (n == 2) {
+        char *digest, *consensus_diff_fname;
+        old_cached_consensus_t *c = tor_malloc(sizeof(old_cached_consensus_t));
+        c->flavor = i;
+        c->valid_after = atol(smartlist_get(parts, 0));
+        digest = smartlist_get(parts, 1);
+        consensus_diff_fname = get_datadir_fname2(flavdir_diff, name);
+        c->diff_mmap = tor_mmap_file(consensus_diff_fname);
+        tor_free(consensus_diff_fname);
+        strmap_set(old_cached_consensus_by_digest, digest, c);
+      }
+      SMARTLIST_FOREACH(parts, char *, str, tor_free(str));
+      smartlist_free(parts);
+    } SMARTLIST_FOREACH_END(name);
+
+    SMARTLIST_FOREACH(filelist, char *, name, tor_free(name));
+    smartlist_free(filelist);
+  }
+}
+
+/** Saves a newly downloaded consensus in its appropriate old cached consensus
+ * by its flavor, compressed via zlib. */
+int
+dirserv_store_consensus(const char *consensus, const char *flavor,
+                        const char *digest, time_t valid_after)
+{
+  char *consensus_fname, flavdir[64], name[64];
+  char *consensus_compressed;
+  size_t comp_len;
+  int r;
+  tor_snprintf(flavdir, sizeof(flavdir),
+               OLD_CACHED_CONS_DIRNAME"-%s", flavor);
+  if (check_or_create_data_subdir(flavdir) != 0) return -1;
+  tor_snprintf(name, 64, "%li-%s", valid_after, digest);
+  if (tor_gzip_compress(&consensus_compressed, &comp_len,
+                        consensus, strlen(consensus),
+                        ZLIB_METHOD)<0) return -1;
+  consensus_fname = get_datadir_fname2(flavdir, name);
+  r = write_bytes_to_file(consensus_fname, consensus_compressed,
+                          comp_len, 1);
+  tor_free(consensus_fname);
+  tor_free(consensus_compressed);
+  if (r<0) return r;
+
+  old_cached_consensus_t *c = tor_malloc(sizeof(old_cached_consensus_t));
+  c->flavor = networkstatus_parse_flavor_name(flavor);
+  c->valid_after = valid_after;
+  c->diff_mmap = NULL;
+  strmap_set(old_cached_consensus_by_digest, digest, c);
+
+  return 0;
+}
+
+// A week for now
+#define KEEP_OLD_CONSENSUSES_INTERVAL (7*24*60*60)
+
+/* Iterates through all cached old consensuses and removes those that are
+ * older than KEEP_OLD_CONSENSUSES_INTERVAL to keep the overall disk usage
+ * down. */
+void
+dirserv_remove_old_consensuses()
+{
+  time_t now = time(NULL);
+
+  tor_assert(old_cached_consensus_by_digest);
+
+  STRMAP_FOREACH_MODIFY(old_cached_consensus_by_digest, digest,
+                        old_cached_consensus_t *, c) {
+
+    if (c->valid_after + KEEP_OLD_CONSENSUSES_INTERVAL < now) {
+      char name[64], *consensus_fname, *diff_fname;
+      char flavdir[64], flavdir_diff[64];
+      const char *flavname = networkstatus_get_flavor_name(c->flavor);
+      tor_snprintf(flavdir, sizeof(flavdir),
+                   OLD_CACHED_CONS_DIRNAME"-%s", flavname);
+      tor_snprintf(flavdir_diff, sizeof(flavdir_diff),
+                   OLD_CACHED_CONS_DIFFS_DIRNAME"-%s", flavname);
+      tor_snprintf(name, 64, "%li-%s", c->valid_after, digest);
+      consensus_fname = get_datadir_fname2(flavdir, name);
+      diff_fname = get_datadir_fname2(flavdir_diff, name);
+      if (unlink(consensus_fname)<0) {
+        log_warn(LD_FS, "Failed to unlink %s: %s",
+                 consensus_fname, strerror(errno));
+      }
+      if (unlink(diff_fname)<0) {
+        log_warn(LD_FS, "Failed to unlink %s: %s",
+                 diff_fname, strerror(errno));
+      }
+      tor_free(consensus_fname);
+      tor_free(diff_fname);
+      tor_free(c);
+      MAP_DEL_CURRENT(digest);
+    }
+
+  } SMARTLIST_FOREACH_END(c);
+}
+
+/** Updates all cached consensus diffs of a certain flavor given a consensus
+ * diff. Writes the newly created consensus diffs to disk using zlib. Updates
+ * old_cached_consensus_by_digest with the new diff file mmaps accordingly.
+ * To make sure no diffs stay around forever, and since all diffs are
+ * regenerated and written to disk again anyway, the complete directory will
+ * be removed first. */
+int
+dirserv_update_consensus_diffs(const char *cur_consensus,
+                               const char *flavname)
+{
+  char flavdir[64], flavdir_diff[64];
+  int r = 0;
+  char *cur_consensus_dup;
+  smartlist_t *cur_consensus_sl;
+  consensus_flavor_t flavor;
+
+  tor_snprintf(flavdir_diff, sizeof(flavdir_diff),
+               OLD_CACHED_CONS_DIFFS_DIRNAME"-%s", flavname);
+  // if (tor_rmdir(flavdir_diff)<0) return -1;
+  if (check_or_create_data_subdir(flavdir_diff)<0) return -1;
+
+  flavor = networkstatus_parse_flavor_name(flavname);
+
+  cur_consensus_dup = tor_strdup(cur_consensus);
+  cur_consensus_sl = smartlist_new();
+  tor_split_lines(cur_consensus_sl, cur_consensus_dup,
+      (int)strlen(cur_consensus_dup));
+
+  tor_snprintf(flavdir, sizeof(flavdir),
+               OLD_CACHED_CONS_DIRNAME"-%s", flavname);
+
+  STRMAP_FOREACH(old_cached_consensus_by_digest, digest,
+                 old_cached_consensus_t *, c) {
+
+    char name[64], *consensus_fname, *consensus_diff_fname;
+    char *stored_consensus_comp, *stored_consensus;
+    char *diff, *diff_comp;
+    smartlist_t *stored_consensus_sl, *diff_sl;
+    struct stat comp_stat;
+    size_t stored_consensus_len;
+    size_t diff_len, diff_comp_len;
+
+    if (c->flavor != flavor) continue;
+    r = -1;
+
+    tor_snprintf(name, 64, "%li-%s", c->valid_after, digest);
+    consensus_fname = get_datadir_fname2(flavdir, name);
+    stored_consensus_comp = read_file_to_str(consensus_fname,
+                                             RFTS_BIN, &comp_stat);
+    tor_free(consensus_fname);
+    if (!stored_consensus_comp) break;
+    r = tor_gzip_uncompress(&stored_consensus, &stored_consensus_len,
+                            stored_consensus_comp, comp_stat.st_size,
+                            ZLIB_METHOD, 1, LOG_PROTOCOL_WARN);
+    tor_free(stored_consensus_comp);
+
+    stored_consensus_sl = smartlist_new();
+    tor_split_lines(stored_consensus_sl, stored_consensus,
+        (int)strlen(stored_consensus));
+
+    diff_sl = consdiff_gen_diff(stored_consensus_sl, cur_consensus_sl);
+    smartlist_free(stored_consensus_sl);
+    tor_free(stored_consensus);
+    if (!diff_sl) break;
+
+    diff = smartlist_join_strings(diff_sl, "\n", 0, &diff_len);
+    SMARTLIST_FOREACH(diff_sl, char *, cp, tor_free(cp));
+    smartlist_free(diff_sl);
+
+    r = tor_gzip_compress(&diff_comp, &diff_comp_len,
+                          diff, diff_len,
+                          ZLIB_METHOD);
+    tor_free(diff);
+    if (r<0) break;
+
+    consensus_diff_fname = get_datadir_fname2(flavdir_diff, name);
+    r = write_bytes_to_file(consensus_diff_fname, diff_comp,
+                            diff_comp_len, 1);
+    tor_munmap_file(c->diff_mmap);
+    c->diff_mmap = tor_mmap_file(consensus_diff_fname);
+    tor_free(consensus_diff_fname);
+    tor_free(diff_comp);
+    if (r<0) break;
+
+  } STRMAP_FOREACH_END;
+
+  tor_free(cur_consensus_dup);
+  smartlist_free(cur_consensus_sl);
+
+  return r;
 }
 
 /** If a router's uptime is at least this value, then it is always
