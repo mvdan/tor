@@ -1229,8 +1229,8 @@ networkstatus_update_consensus_diffs(const char *cur_consensus,
     smartlist_free(diff_sl);
 
     r = networkstatus_store_consensus_diff(diff, flavor, digest);
-    if (r<0) break;
     tor_free(diff);
+    if (r<0) break;
 
   } SMARTLIST_FOREACH_END(digest);
 
