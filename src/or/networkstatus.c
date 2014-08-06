@@ -1124,6 +1124,42 @@ networkstatus_copy_old_consensus_info(networkstatus_t *new_c,
   } SMARTLIST_FOREACH_JOIN_END(rs_old, rs_new);
 }
 
+char *
+networkstatus_get_stored_consensus(const char *flavor,
+                                   const char *digest)
+{
+  char *consensus_fname, flavdir[32];
+  sprintf(flavdir, "stored-consensuses-%s", flavor);
+  consensus_fname = get_datadir_fname2(flavdir, digest);
+  return read_file_to_str(consensus_fname, 0, NULL);
+}
+
+smartlist_t *
+networkstatus_list_stored_consensuses(const char *flavor)
+{
+  char *consensuses_fname, flavdir[32];
+  smartlist_t *result;
+  sprintf(flavdir, "stored-consensuses-%s", flavor);
+  consensuses_fname = get_datadir_fname(flavdir);
+  result = tor_listdir(consensuses_fname);
+  if (result == NULL) {
+    return smartlist_new();
+  }
+  return result;
+}
+
+int
+networkstatus_store_consensus(const char *consensus,
+                              const char *flavor,
+                              const char *digest)
+{
+  char *consensus_fname, flavdir[32];
+  sprintf(flavdir, "stored-consensuses-%s", flavor);
+  if (check_or_create_data_subdir(flavdir) != 0) return -1;
+  consensus_fname = get_datadir_fname2(flavdir, digest);
+  return write_str_to_file(consensus_fname, consensus, 0);
+}
+
 /** Try to replace the current cached v3 networkstatus with the one in
  * <b>consensus</b>.  If we don't have enough certificates to validate it,
  * store it in consensus_waiting_for_certs and launch a certificate fetch.

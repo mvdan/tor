@@ -73,6 +73,15 @@ networkstatus_t *networkstatus_get_reasonably_live_consensus(time_t now,
 int networkstatus_set_current_consensus(const char *consensus,
                                         const char *flavor,
                                         unsigned flags);
+char *
+networkstatus_get_stored_consensus(const char *flavor,
+                                   const char *digest);
+smartlist_t *
+networkstatus_list_stored_consensuses(const char *flavor);
+int
+networkstatus_store_consensus(const char *consensus,
+                              const char *flavor,
+                              const char *digest);
 void networkstatus_note_certs_arrived(void);
 void routers_update_all_from_networkstatus(time_t now, int dir_version);
 void routers_update_status_from_consensus_networkstatus(smartlist_t *routers,
