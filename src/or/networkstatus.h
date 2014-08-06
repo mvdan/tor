@@ -82,6 +82,13 @@ int
 networkstatus_store_consensus(const char *consensus,
                               const char *flavor,
                               const char *digest);
+int
+networkstatus_store_consensus_diff(const char *consensus_diff,
+                                   const char *flavor,
+                                   const char *digest);
+int
+networkstatus_update_consensus_diffs(const char *cur_consensus,
+                                     const char *flavor);
 void networkstatus_note_certs_arrived(void);
 void routers_update_all_from_networkstatus(time_t now, int dir_version);
 void routers_update_status_from_consensus_networkstatus(smartlist_t *routers,

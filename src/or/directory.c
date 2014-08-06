@@ -1781,6 +1781,7 @@ connection_dir_client_reached_eof(dir_connection_t *conn)
               "don't have: %s", base_consensus_digest_hex);
           tor_free(body_dup); smartlist_free(body_lines);
           tor_free(body); tor_free(headers); tor_free(reason);
+          networkstatus_consensus_download_failed(0, flavname);
           return -1;
         }
         base_consensus_lines = smartlist_new();
@@ -1812,10 +1813,16 @@ connection_dir_client_reached_eof(dir_connection_t *conn)
                "from server '%s:%d'",
                (int)body_len, conn->base_.address, conn->base_.port);
     }
+    if (networkstatus_update_consensus_diffs(consensus, flavname)<0) {
+      log_warn(LD_DIR, "Unable to update the stored consensus diffs.");
+      tor_free(consensus); tor_free(headers); tor_free(reason);
+      networkstatus_consensus_download_failed(0, flavname);
+      return -1;
+    }
     if (networkstatus_store_consensus(consensus, flavname,
                                       consensus_digest_hex)<0) {
       log_warn(LD_DIR, "Unable to store fetched consensus "
-               "for diff purposes.");
+               "for future diff purposes.");
     }
     if ((r=networkstatus_set_current_consensus(consensus, flavname, 0))<0) {
       log_fn(r<-1?LOG_WARN:LOG_INFO, LD_DIR,

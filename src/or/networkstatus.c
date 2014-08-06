@@ -19,6 +19,7 @@
 #include "config.h"
 #include "connection.h"
 #include "connection_or.h"
+#include "consdiff.h"
 #include "control.h"
 #include "directory.h"
 #include "dirserv.h"
@@ -1128,20 +1129,23 @@ char *
 networkstatus_get_stored_consensus(const char *flavor,
                                    const char *digest)
 {
-  char *consensus_fname, flavdir[32];
+  char *consensus_fname, flavdir[64], *consensus;
   sprintf(flavdir, "stored-consensuses-%s", flavor);
   consensus_fname = get_datadir_fname2(flavdir, digest);
-  return read_file_to_str(consensus_fname, 0, NULL);
+  consensus = read_file_to_str(consensus_fname, 0, NULL);
+  tor_free(consensus_fname);
+  return consensus;
 }
 
 smartlist_t *
 networkstatus_list_stored_consensuses(const char *flavor)
 {
-  char *consensuses_fname, flavdir[32];
+  char *consensuses_fname, flavdir[64];
   smartlist_t *result;
   sprintf(flavdir, "stored-consensuses-%s", flavor);
   consensuses_fname = get_datadir_fname(flavdir);
   result = tor_listdir(consensuses_fname);
+  tor_free(consensuses_fname);
   if (result == NULL) {
     return smartlist_new();
   }
@@ -1153,11 +1157,89 @@ networkstatus_store_consensus(const char *consensus,
                               const char *flavor,
                               const char *digest)
 {
-  char *consensus_fname, flavdir[32];
+  char *consensus_fname, flavdir[64];
+  int r;
   sprintf(flavdir, "stored-consensuses-%s", flavor);
   if (check_or_create_data_subdir(flavdir) != 0) return -1;
   consensus_fname = get_datadir_fname2(flavdir, digest);
-  return write_str_to_file(consensus_fname, consensus, 0);
+  r = write_str_to_file(consensus_fname, consensus, 0);
+  tor_free(consensus_fname);
+  return r;
+}
+
+int
+networkstatus_store_consensus_diff(const char *consensus_diff,
+                                   const char *flavor,
+                                   const char *digest)
+{
+  char flavdir_diff[64], *consensus_diff_fname;
+  int r;
+
+  sprintf(flavdir_diff, "stored-consensus-diffs-%s", flavor);
+  if (check_or_create_data_subdir(flavdir_diff) != 0) return -1;
+
+  consensus_diff_fname = get_datadir_fname2(flavdir_diff, digest);
+  r = write_str_to_file(consensus_diff_fname, consensus_diff, 0);
+  tor_free(consensus_diff_fname);
+  return r;
+}
+
+int
+networkstatus_update_consensus_diffs(const char *cur_consensus,
+                                     const char *flavor)
+{
+  char flavdir[64];
+  char *cur_consensus_dup;
+  int r = 0;
+  smartlist_t *cur_consensus_sl, *stored_consensus_sl, *diff_sl;
+  smartlist_t *stored_consensuses_digests;
+
+  cur_consensus_dup = tor_strdup(cur_consensus);
+  cur_consensus_sl = smartlist_new();
+  tor_split_lines(cur_consensus_sl, cur_consensus_dup,
+      (int)strlen(cur_consensus_dup));
+
+  sprintf(flavdir, "stored-consensuses-%s", flavor);
+
+  stored_consensuses_digests =
+    networkstatus_list_stored_consensuses(flavor);
+
+  SMARTLIST_FOREACH_BEGIN(stored_consensuses_digests,
+                          const char *, digest) {
+
+    char *consensus_fname = get_datadir_fname2(flavdir, digest);
+    char *stored_consensus = read_file_to_str(consensus_fname, 0, NULL);
+    char *diff;
+    tor_free(consensus_fname);
+
+    stored_consensus_sl = smartlist_new();
+    tor_split_lines(stored_consensus_sl, stored_consensus,
+        (int)strlen(stored_consensus));
+
+    diff_sl = consdiff_gen_diff(stored_consensus_sl, cur_consensus_sl);
+    smartlist_free(stored_consensus_sl);
+    tor_free(stored_consensus);
+
+    if (!diff_sl) {
+      r = -1;
+      break;
+    }
+    diff = smartlist_join_strings(diff_sl, "\n", 0, NULL);
+    SMARTLIST_FOREACH(diff_sl, char *, cp, tor_free(cp));
+    smartlist_free(diff_sl);
+
+    r = networkstatus_store_consensus_diff(diff, flavor, digest);
+    if (r<0) break;
+    tor_free(diff);
+
+  } SMARTLIST_FOREACH_END(digest);
+
+  SMARTLIST_FOREACH(stored_consensuses_digests, char *, cp, tor_free(cp));
+  smartlist_free(stored_consensuses_digests);
+  tor_free(cur_consensus_dup);
+  smartlist_free(cur_consensus_sl);
+
+  return r;
 }
 
 /** Try to replace the current cached v3 networkstatus with the one in
