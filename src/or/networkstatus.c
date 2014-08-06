@@ -1130,7 +1130,8 @@ networkstatus_get_stored_consensus(const char *flavor,
                                    const char *digest)
 {
   char *consensus_fname, flavdir[64], *consensus;
-  sprintf(flavdir, "stored-consensuses-%s", flavor);
+  tor_snprintf(flavdir, sizeof(flavdir),
+               "stored-consensuses-%s", flavor);
   consensus_fname = get_datadir_fname2(flavdir, digest);
   consensus = read_file_to_str(consensus_fname, 0, NULL);
   tor_free(consensus_fname);
@@ -1142,7 +1143,8 @@ networkstatus_list_stored_consensuses(const char *flavor)
 {
   char *consensuses_fname, flavdir[64];
   smartlist_t *result;
-  sprintf(flavdir, "stored-consensuses-%s", flavor);
+  tor_snprintf(flavdir, sizeof(flavdir),
+               "stored-consensuses-%s", flavor);
   consensuses_fname = get_datadir_fname(flavdir);
   result = tor_listdir(consensuses_fname);
   tor_free(consensuses_fname);
@@ -1159,7 +1161,8 @@ networkstatus_store_consensus(const char *consensus,
 {
   char *consensus_fname, flavdir[64];
   int r;
-  sprintf(flavdir, "stored-consensuses-%s", flavor);
+  tor_snprintf(flavdir, sizeof(flavdir),
+               "stored-consensuses-%s", flavor);
   if (check_or_create_data_subdir(flavdir) != 0) return -1;
   consensus_fname = get_datadir_fname2(flavdir, digest);
   r = write_str_to_file(consensus_fname, consensus, 0);
@@ -1175,7 +1178,8 @@ networkstatus_store_consensus_diff(const char *consensus_diff,
   char flavdir_diff[64], *consensus_diff_fname;
   int r;
 
-  sprintf(flavdir_diff, "stored-consensus-diffs-%s", flavor);
+  tor_snprintf(flavdir_diff, sizeof(flavdir_diff),
+               "stored-consensus-diffs-%s", flavor);
   if (check_or_create_data_subdir(flavdir_diff) != 0) return -1;
 
   consensus_diff_fname = get_datadir_fname2(flavdir_diff, digest);
@@ -1199,7 +1203,8 @@ networkstatus_update_consensus_diffs(const char *cur_consensus,
   tor_split_lines(cur_consensus_sl, cur_consensus_dup,
       (int)strlen(cur_consensus_dup));
 
-  sprintf(flavdir, "stored-consensuses-%s", flavor);
+  tor_snprintf(flavdir, sizeof(flavdir),
+               "stored-consensuses-%s", flavor);
 
   stored_consensuses_digests =
     networkstatus_list_stored_consensuses(flavor);
