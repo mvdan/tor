@@ -1408,7 +1408,24 @@ networkstatus_set_current_consensus(const char *consensus,
   }
 
   if (directory_caches_dir_info(options)) {
-    dirserv_update_consensus_diffs(consensus, flavor);
+    char digest_hex[HEX_DIGEST256_LEN+1];
+    if (!strcmp(flavor, "ns")) {
+      base16_encode(digest_hex, HEX_DIGEST256_LEN+1,
+                    current_ns_consensus->digests.d[DIGEST_SHA256],
+                    DIGEST256_LEN);
+    } else if (!strcmp(flavor, "microdesc")) {
+      base16_encode(digest_hex, HEX_DIGEST256_LEN+1,
+                    current_md_consensus->digests.d[DIGEST_SHA256],
+                    DIGEST256_LEN);
+    }
+    if (dirserv_update_consensus_diffs(consensus, flavor)<0) {
+      log_warn(LD_DIR, "Failed to update the stored consensus diffs.");
+      goto done;
+    }
+    if (dirserv_store_consensus(consensus, flavor, digest_hex)<0) {
+      log_warn(LD_DIR, "Unable to store fetched consensus "
+               "for future diff purposes.");
+    }
     dirserv_set_cached_consensus_networkstatus(consensus,
                                                flavor,
                                                &c->digests,
