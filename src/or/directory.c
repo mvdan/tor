@@ -1765,17 +1765,31 @@ connection_dir_client_reached_eof(dir_connection_t *conn)
     {
       char *base_consensus, base_consensus_digest_hex[HEX_DIGEST256_LEN+1];
       smartlist_t *base_consensus_lines, *body_lines;
+      char *body_dup = tor_strdup(body);
       body_lines = smartlist_new();
-      tor_split_lines(body_lines, tor_strdup(body), (int)body_len);
+      tor_split_lines(body_lines, body_dup, (int)body_len);
+
+      /* Is a consensus diff. */
       if (consdiff_get_digests(body_lines,
                                NULL, base_consensus_digest_hex,
                                NULL, consensus_digest_hex) == 0) {
         base_consensus = networkstatus_get_stored_consensus(
             flavname, base_consensus_digest_hex);
+        if (!base_consensus) {
+          log_warn(LD_DIR,
+              "Received a consensus applying to a consensus that we "
+              "don't have: %s", base_consensus_digest_hex);
+          tor_free(body_dup); smartlist_free(body_lines);
+          tor_free(body); tor_free(headers); tor_free(reason);
+          return -1;
+        }
         base_consensus_lines = smartlist_new();
         tor_split_lines(base_consensus_lines, base_consensus,
             (int)strlen(base_consensus));
         diff_result = consdiff_apply_diff(base_consensus_lines, body_lines);
+        tor_free(base_consensus); smartlist_free(base_consensus_lines);
+
+      /* Is a plain old consensus. */
       } else {
         char consensus_digest[DIGEST256_LEN];
         crypto_digest_t *d = crypto_digest256_new(DIGEST_SHA256);
@@ -1785,6 +1799,7 @@ connection_dir_client_reached_eof(dir_connection_t *conn)
         base16_encode(consensus_digest_hex, HEX_DIGEST256_LEN+1,
                       consensus_digest, DIGEST256_LEN);
       }
+      tor_free(body_dup); smartlist_free(body_lines);
     }
     if (diff_result) {
       consensus = smartlist_join_strings(diff_result, "\n", 1, NULL);
