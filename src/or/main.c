@@ -1964,6 +1964,12 @@ do_main_loop(void)
     log_warn(LD_DIR,
              "Couldn't load all cached v3 certificates. Starting anyway.");
   }
+  const or_options_t *options = get_options();
+  /* See what consensuses have we cached on disk. */
+  if (directory_caches_dir_info(options)) {
+    dirserv_refresh_stored_consensuses();
+    dirserv_remove_old_consensuses();
+  }
   if (router_reload_consensus_networkstatus()) {
     return -1;
   }
@@ -1971,6 +1977,7 @@ do_main_loop(void)
   if (router_reload_router_list()) {
     return -1;
   }
+
   /* load the networkstatuses. (This launches a download for new routers as
    * appropriate.)
    */
