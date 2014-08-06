@@ -1812,7 +1812,11 @@ connection_dir_client_reached_eof(dir_connection_t *conn)
                "from server '%s:%d'",
                (int)body_len, conn->base_.address, conn->base_.port);
     }
-    networkstatus_store_consensus(consensus, flavname, consensus_digest_hex);
+    if (networkstatus_store_consensus(consensus, flavname,
+                                      consensus_digest_hex)<0) {
+      log_warn(LD_DIR, "Unable to store fetched consensus "
+               "for diff purposes.");
+    }
     if ((r=networkstatus_set_current_consensus(consensus, flavname, 0))<0) {
       log_fn(r<-1?LOG_WARN:LOG_INFO, LD_DIR,
              "Unable to load %s consensus directory downloaded from "
