@@ -795,31 +795,27 @@ consdiff_gen_diff(smartlist_t *cons1, smartlist_t *cons2)
   return result;
 }
 
-/** Apply the consensus diff to the given consensus and return a new
- * consensus, also as a line-based smartlist. Will return NULL if the diff
- * could not be applied. Neither the consensus nor the diff are modified in
- * any way, so it's up to the caller to free their resources.
+/** Fetch the digest of the base consensus in the consensus diff, encoded in
+ * base16 as found in the diff itself.
  */
-smartlist_t *
-consdiff_apply_diff(smartlist_t *cons1, smartlist_t *diff)
+int
+consdiff_get_digests(smartlist_t *diff,
+                     char *digest1, char *digest1_hex,
+                     char *digest2, char *digest2_hex)
 {
-  smartlist_t *hash_words = NULL, *cons2 = NULL, *ed_diff;
-  const char *format, *e_cons1_hash_hex, *e_cons2_hash_hex;
-  char e_cons1_hash[DIGEST256_LEN];
-  char e_cons2_hash[DIGEST256_LEN];
-  char cons1_hash[DIGEST256_LEN];
-  char cons2_hash[DIGEST256_LEN];
-  char cons1_hash_hex[HEX_DIGEST256_LEN+1];
+  smartlist_t *hash_words = NULL;
+  const char *format;
+  char cons1_hash[DIGEST256_LEN], cons2_hash[DIGEST256_LEN];
+  char *cons1_hash_hex, *cons2_hash_hex;
   if (smartlist_len(diff) < 3) {
-    log_warn(LD_CONSDIFF, "Refusing to apply consensus diff because "
-        "it has too few lines.");
+    log_info(LD_CONSDIFF, "The provided consensus diff is too short.");
     goto error_cleanup;
   }
 
   /* Check that it's the format and version we know. */
   format = smartlist_get(diff, 0);
   if (strcmp(format, "network-status-diff-version 1")) {
-    log_warn(LD_CONSDIFF, "The consensus diff's format is not known.");
+    log_warn(LD_CONSDIFF, "The provided consensus diff format is not known.");
     goto error_cleanup;
   }
 
@@ -830,8 +826,8 @@ consdiff_apply_diff(smartlist_t *cons1, smartlist_t *diff)
   /* There have to be three words, the first of which must be "hash". */
   if (smartlist_len(hash_words) != 3 ||
       strcmp(smartlist_get(hash_words, 0), "hash")) {
-    log_warn(LD_CONSDIFF, "Refusing to apply consensus diff because "
-        "it does not include the necessary sha256 digests.");
+    log_info(LD_CONSDIFF, "The provided consensus diff does not include "
+        "the necessary sha256 digests.");
     goto error_cleanup;
   }
 
@@ -840,23 +836,67 @@ consdiff_apply_diff(smartlist_t *cons1, smartlist_t *diff)
    * If any of the decodings fail, error to make sure that the hashes are
    * proper base16-encoded SHA256 digests.
    */
-  e_cons1_hash_hex = smartlist_get(hash_words, 1);
-  e_cons2_hash_hex = smartlist_get(hash_words, 2);
-  if (strlen(e_cons1_hash_hex) != HEX_DIGEST256_LEN ||
-      strlen(e_cons2_hash_hex) != HEX_DIGEST256_LEN ||
-      base16_decode(e_cons1_hash, DIGEST256_LEN,
-          e_cons1_hash_hex, HEX_DIGEST256_LEN) != 0 ||
-      base16_decode(e_cons2_hash, DIGEST256_LEN,
-          e_cons2_hash_hex, HEX_DIGEST256_LEN) != 0) {
-    log_warn(LD_CONSDIFF, "Refusing to apply consensus diff because "
-        "the found digests are not proper sha256 digests.");
+  cons1_hash_hex = smartlist_get(hash_words, 1);
+  cons2_hash_hex = smartlist_get(hash_words, 2);
+  if (strlen(cons1_hash_hex) != HEX_DIGEST256_LEN ||
+      strlen(cons2_hash_hex) != HEX_DIGEST256_LEN) {
+    log_info(LD_CONSDIFF, "The provided consensus diff includes "
+        "base16-encoded sha256 digests of incorrect size.");
     goto error_cleanup;
   }
 
+  if (digest1_hex != NULL)
+    strncpy(digest1_hex, cons1_hash_hex, HEX_DIGEST256_LEN+1);
+  if (digest2_hex != NULL)
+    strncpy(digest2_hex, cons2_hash_hex, HEX_DIGEST256_LEN+1);
+
+  if (base16_decode(cons1_hash, DIGEST256_LEN,
+          cons1_hash_hex, HEX_DIGEST256_LEN) != 0 ||
+      base16_decode(cons2_hash, DIGEST256_LEN,
+          cons2_hash_hex, HEX_DIGEST256_LEN) != 0) {
+    log_info(LD_CONSDIFF, "The provided consensus diff includes "
+        "malformed sha256 digests.");
+    goto error_cleanup;
+  }
+
+  if (digest1 != NULL)
+    strncpy(digest1, cons1_hash, DIGEST256_LEN);
+  if (digest2 != NULL)
+    strncpy(digest2, cons2_hash, DIGEST256_LEN);
+
+  SMARTLIST_FOREACH(hash_words, char *, cp, tor_free(cp));
+  smartlist_free(hash_words);
+  return 0;
+
+  error_cleanup:
+
+  if (hash_words) {
+    SMARTLIST_FOREACH(hash_words, char *, cp, tor_free(cp));
+    smartlist_free(hash_words);
+  }
+  return 1;
+}
+
+/** Apply the consensus diff to the given consensus and return a new
+ * consensus, also as a line-based smartlist. Will return NULL if the diff
+ * could not be applied. Neither the consensus nor the diff are modified in
+ * any way, so it's up to the caller to free their resources.
+ */
+smartlist_t *
+consdiff_apply_diff(smartlist_t *cons1, smartlist_t *diff)
+{
+  smartlist_t *cons2 = NULL, *ed_diff;
+  char e_cons1_hash[DIGEST256_LEN];
+  char e_cons2_hash[DIGEST256_LEN];
+  char cons1_hash[DIGEST256_LEN];
+  char cons2_hash[DIGEST256_LEN];
+
+  if (consdiff_get_digests(diff,
+        e_cons1_hash, NULL, e_cons2_hash, NULL) != 0)
+    goto error_cleanup;
+
   /* See that the consensus that was given to us matches its hash. */
   crypto_digest_smartlist_ends(cons1_hash, cons1, "\n");
-  base16_encode(cons1_hash_hex, HEX_DIGEST256_LEN+1,
-      cons1_hash, DIGEST256_LEN);
   if (memcmp(cons1_hash, e_cons1_hash, DIGEST256_LEN*sizeof(char)) != 0) {
     log_warn(LD_CONSDIFF, "Refusing to apply consensus diff because "
         "the base consensus doesn't match its own digest as found in "
@@ -886,16 +926,10 @@ consdiff_apply_diff(smartlist_t *cons1, smartlist_t *diff)
     goto error_cleanup;
   }
 
-  SMARTLIST_FOREACH(hash_words, char *, cp, tor_free(cp));
-  smartlist_free(hash_words);
   return cons2;
 
   error_cleanup:
 
-  if (hash_words) {
-    SMARTLIST_FOREACH(hash_words, char *, cp, tor_free(cp));
-    smartlist_free(hash_words);
-  }
   if (cons2) {
     SMARTLIST_FOREACH(cons2, char *, cp, tor_free(cp));
     smartlist_free(cons2);
