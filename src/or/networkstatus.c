@@ -19,6 +19,7 @@
 #include "config.h"
 #include "connection.h"
 #include "connection_or.h"
+#include "consdiff.h"
 #include "control.h"
 #include "directory.h"
 #include "dirserv.h"
@@ -55,6 +56,11 @@ static networkstatus_t *current_ns_consensus = NULL;
 /** Most recently received and validated v3 "microdec"-flavored consensus
  * network status. */
 static networkstatus_t *current_md_consensus = NULL;
+
+/** Same as above, but memory mapped from their files to fetch the full
+ * strings later on. */
+static tor_mmap_t *current_ns_consensus_mmap = NULL;
+static tor_mmap_t *current_md_consensus_mmap = NULL;
 
 /** A v3 consensus networkstatus that we've received, but which we don't
  * have enough certificates to be happy about. */
@@ -1025,6 +1031,22 @@ networkstatus_get_latest_consensus_by_flavor,(consensus_flavor_t f))
   }
 }
 
+/** Like networkstatus_get_latest_consensus_by_flavor, but return a mmap of
+ * the cached file on disk (uncompressed) instead of the full parsed
+ * networkstatus_t struct. */
+tor_mmap_t *
+networkstatus_get_latest_consensus_mmap_by_flavor(consensus_flavor_t f)
+{
+  if (f == FLAV_NS)
+    return current_ns_consensus_mmap;
+  else if (f == FLAV_MICRODESC)
+    return current_md_consensus_mmap;
+  else {
+    tor_assert(0);
+    return NULL;
+  }
+}
+
 /** Return the most recent consensus that we have downloaded, or NULL if it is
  * no longer live. */
 networkstatus_t *
@@ -1414,10 +1436,42 @@ networkstatus_set_current_consensus(const char *consensus,
                                                flavor,
                                                &c->digests,
                                                c->valid_after);
+    char digest_hex[HEX_DIGEST256_LEN+1];
+    if (!strcmp(flavor, "ns")) {
+      base16_encode(digest_hex, HEX_DIGEST256_LEN+1,
+                    current_ns_consensus->digests.d[DIGEST_SHA256],
+                    DIGEST256_LEN);
+    } else if (!strcmp(flavor, "microdesc")) {
+      base16_encode(digest_hex, HEX_DIGEST256_LEN+1,
+                    current_md_consensus->digests.d[DIGEST_SHA256],
+                    DIGEST256_LEN);
+    }
+    if (dirserv_update_consensus_diffs(consensus, flavor)<0) {
+      log_warn(LD_DIR, "Failed to update the stored consensus diffs.");
+      goto done;
+    }
+    if (dirserv_store_consensus(consensus, flavor, digest_hex,
+                                c->valid_after)<0) {
+      log_warn(LD_DIR, "Unable to store fetched consensus "
+               "for future diff purposes.");
+    }
   }
 
   if (!from_cache) {
     write_str_to_file(consensus_fname, consensus, 0);
+    if (!strcmp(flavor, "ns")) {
+      if (tor_munmap_file(current_ns_consensus_mmap)) {
+        log_warn(LD_FS, "Failed to munmap the cached consensus file. "
+            "Probably about to leak memory.");
+      }
+      current_ns_consensus_mmap = tor_mmap_file(consensus_fname);
+    } else if (!strcmp(flavor, "microdesc")) {
+      if (tor_munmap_file(current_md_consensus_mmap)) {
+        log_warn(LD_FS, "Failed to munmap the cached consensus file. "
+            "Probably about to leak memory.");
+      }
+      current_md_consensus_mmap = tor_mmap_file(consensus_fname);
+    }
   }
 
 /** If a consensus appears more than this many seconds before its declared
