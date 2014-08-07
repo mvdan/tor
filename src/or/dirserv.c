@@ -1400,6 +1400,9 @@ dirserv_store_consensus_diff(const char *consensus_diff,
   return r;
 }
 
+// A week for now
+#define KEEP_OLD_CONSENSUSES_INTERVAL (7*24*60*60)
+
 int
 dirserv_update_consensus_diffs(const char *cur_consensus,
                                const char *flavor)
@@ -1407,6 +1410,7 @@ dirserv_update_consensus_diffs(const char *cur_consensus,
   char flavdir[64];
   char *cur_consensus_dup;
   int r = 0;
+  time_t now = time(NULL);
   smartlist_t *cur_consensus_sl, *stored_consensus_sl, *diff_sl;
   smartlist_t *stored_consensuses_digests;
 
@@ -1426,6 +1430,23 @@ dirserv_update_consensus_diffs(const char *cur_consensus,
     char *consensus_fname = get_datadir_fname2(flavdir, digest);
     char *stored_consensus = read_file_to_str(consensus_fname, 0, NULL);
     char *diff;
+    time_t cons_va;
+    networkstatus_t *c;
+    r = -1;
+    c = networkstatus_parse_vote_from_string(stored_consensus, NULL,
+                                             NS_TYPE_CONSENSUS);
+    if (!c) break;
+    cons_va = c->valid_after;
+    networkstatus_vote_free(c);
+    if (c->valid_after + KEEP_OLD_CONSENSUSES_INTERVAL < now) {
+      tor_free(stored_consensus);
+      if (unlink(consensus_fname) != 0) {
+        log_warn(LD_FS, "Failed to unlink %s: %s",
+                 consensus_fname, strerror(errno));
+      }
+      tor_free(consensus_fname);
+      continue;
+    }
     tor_free(consensus_fname);
 
     stored_consensus_sl = smartlist_new();
@@ -1435,11 +1456,8 @@ dirserv_update_consensus_diffs(const char *cur_consensus,
     diff_sl = consdiff_gen_diff(stored_consensus_sl, cur_consensus_sl);
     smartlist_free(stored_consensus_sl);
     tor_free(stored_consensus);
+    if (!diff_sl) break;
 
-    if (!diff_sl) {
-      r = -1;
-      break;
-    }
     diff = smartlist_join_strings(diff_sl, "\n", 0, NULL);
     SMARTLIST_FOREACH(diff_sl, char *, cp, tor_free(cp));
     smartlist_free(diff_sl);
