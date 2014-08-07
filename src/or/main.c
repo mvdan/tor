@@ -1971,6 +1971,22 @@ do_main_loop(void)
   if (router_reload_router_list()) {
     return -1;
   }
+
+  const or_options_t *options = get_options();
+  /* Update consensus diffs. */
+  if (authdir_mode(options)) {
+    tor_mmap_t *cons;
+    cons = networkstatus_get_latest_consensus_mmap_by_flavor(FLAV_NS);
+    if (cons) {
+      dirserv_update_consensus_diffs(cons->data, "ns");
+      tor_free(cons);
+    }
+    cons = networkstatus_get_latest_consensus_mmap_by_flavor(FLAV_MICRODESC);
+    if (cons) {
+      dirserv_update_consensus_diffs(cons->data, "microdesc");
+      tor_free(cons);
+    }
+  }
   /* load the networkstatuses. (This launches a download for new routers as
    * appropriate.)
    */

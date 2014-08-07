@@ -1433,6 +1433,7 @@ dirserv_update_consensus_diffs(const char *cur_consensus,
     time_t cons_va;
     networkstatus_t *c;
     r = -1;
+    // Make sure that the stored string is actually a consensus.
     c = networkstatus_parse_vote_from_string(stored_consensus, NULL,
                                              NS_TYPE_CONSENSUS);
     if (!c) break;

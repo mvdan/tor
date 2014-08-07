@@ -1794,6 +1794,7 @@ connection_dir_client_reached_eof(dir_connection_t *conn)
           return -1;
         }
         base_consensus = tor_strndup(cons_mmap->data, cons_mmap->size);
+        tor_free(cons_mmap);
         base_consensus_lines = smartlist_new();
         tor_split_lines(base_consensus_lines, base_consensus,
             (int)strlen(base_consensus));
