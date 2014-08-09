@@ -1407,7 +1407,11 @@ networkstatus_set_current_consensus(const char *consensus,
         current_consensus);
   }
 
-  if (authdir_mode(options)) {
+  if (directory_caches_dir_info(options)) {
+    dirserv_set_cached_consensus_networkstatus(consensus,
+                                               flavor,
+                                               &c->digests,
+                                               c->valid_after);
     char digest_hex[HEX_DIGEST256_LEN+1];
     if (!strcmp(flavor, "ns")) {
       base16_encode(digest_hex, HEX_DIGEST256_LEN+1,
@@ -1426,13 +1430,6 @@ networkstatus_set_current_consensus(const char *consensus,
       log_warn(LD_DIR, "Unable to store fetched consensus "
                "for future diff purposes.");
     }
-  }
-
-  if (directory_caches_dir_info(options)) {
-    dirserv_set_cached_consensus_networkstatus(consensus,
-                                               flavor,
-                                               &c->digests,
-                                               c->valid_after);
   }
 
   if (!from_cache) {

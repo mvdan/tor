@@ -1974,7 +1974,7 @@ do_main_loop(void)
 
   const or_options_t *options = get_options();
   /* Update consensus diffs. */
-  if (authdir_mode(options)) {
+  if (directory_caches_dir_info(options)) {
     tor_mmap_t *cons;
     cons = networkstatus_get_latest_consensus_mmap_by_flavor(FLAV_NS);
     if (cons) {
