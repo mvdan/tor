@@ -1384,8 +1384,8 @@ dirserv_store_consensus(const char *consensus, const char *flavor,
 
 int
 dirserv_store_consensus_diff(const char *consensus_diff,
-                     const char *flavor,
-                     const char *digest)
+                             const char *flavor,
+                             const char *digest)
 {
   char flavdir_diff[64], *consensus_diff_fname;
   int r;
