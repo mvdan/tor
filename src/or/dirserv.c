@@ -1339,12 +1339,15 @@ dirserv_get_consensus(const char *flavor_name)
   return strmap_get(cached_consensuses, flavor_name);
 }
 
+#define OLD_CACHED_CONS_DIRNAME "old-cached-consensuses"
+#define OLD_CACHED_CONS_DIFFS_DIRNAME "old-cached-consensus-diffs"
+
 char *
 dirserv_get_stored_consensus(const char *flavor, const char *digest)
 {
   char *consensus_fname, flavdir[64], *consensus;
   tor_snprintf(flavdir, sizeof(flavdir),
-               "stored-consensuses-%s", flavor);
+               "%s-%s", OLD_CACHED_CONS_DIRNAME, flavor);
   consensus_fname = get_datadir_fname2(flavdir, digest);
   consensus = read_file_to_str(consensus_fname, 0, NULL);
   tor_free(consensus_fname);
@@ -1357,7 +1360,7 @@ dirserv_list_stored_consensuses(const char *flavor)
   char *consensuses_fname, flavdir[64];
   smartlist_t *result;
   tor_snprintf(flavdir, sizeof(flavdir),
-               "stored-consensuses-%s", flavor);
+               "%s-%s", OLD_CACHED_CONS_DIRNAME, flavor);
   consensuses_fname = get_datadir_fname(flavdir);
   result = tor_listdir(consensuses_fname);
   tor_free(consensuses_fname);
@@ -1374,7 +1377,7 @@ dirserv_store_consensus(const char *consensus, const char *flavor,
   char *consensus_fname, flavdir[64];
   int r;
   tor_snprintf(flavdir, sizeof(flavdir),
-               "stored-consensuses-%s", flavor);
+               "%s-%s", OLD_CACHED_CONS_DIRNAME, flavor);
   if (check_or_create_data_subdir(flavdir) != 0) return -1;
   consensus_fname = get_datadir_fname2(flavdir, digest);
   r = write_str_to_file(consensus_fname, consensus, 0);
@@ -1391,7 +1394,7 @@ dirserv_store_consensus_diff(const char *consensus_diff,
   int r;
 
   tor_snprintf(flavdir_diff, sizeof(flavdir_diff),
-               "stored-consensus-diffs-%s", flavor);
+               "%s-%s", OLD_CACHED_CONS_DIFFS_DIRNAME, flavor);
   if (check_or_create_data_subdir(flavdir_diff) != 0) return -1;
 
   consensus_diff_fname = get_datadir_fname2(flavdir_diff, digest);
@@ -1420,7 +1423,7 @@ dirserv_update_consensus_diffs(const char *cur_consensus,
       (int)strlen(cur_consensus_dup));
 
   tor_snprintf(flavdir, sizeof(flavdir),
-               "stored-consensuses-%s", flavor);
+               "%s-%s", OLD_CACHED_CONS_DIRNAME, flavor);
 
   stored_consensuses_digests = dirserv_list_stored_consensuses(flavor);
 
