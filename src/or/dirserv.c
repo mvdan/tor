@@ -1419,7 +1419,15 @@ dirserv_store_consensus(const char *consensus, const char *flavor,
                           comp_len, 1);
   tor_free(consensus_fname);
   tor_free(consensus_compressed);
-  return r;
+  if (r<0) return r;
+
+  old_cached_consensus_t *c = tor_malloc(sizeof(old_cached_consensus_t));
+  c->flavor = (!strcmp(flavor, "ns")) ? FLAV_NS : FLAV_MICRODESC;
+  c->valid_after = valid_after;
+  c->diff_mmap = NULL;
+  strmap_set(old_cached_consensus_by_digest, digest, c);
+
+  return 0;
 }
 
 // A week for now
