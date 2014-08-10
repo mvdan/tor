@@ -1426,7 +1426,8 @@ networkstatus_set_current_consensus(const char *consensus,
       log_warn(LD_DIR, "Failed to update the stored consensus diffs.");
       goto done;
     }
-    if (dirserv_store_consensus(consensus, flavor, digest_hex)<0) {
+    if (dirserv_store_consensus(consensus, flavor, digest_hex,
+                                c->valid_after)<0) {
       log_warn(LD_DIR, "Unable to store fetched consensus "
                "for future diff purposes.");
     }

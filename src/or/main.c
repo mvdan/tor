@@ -1976,6 +1976,7 @@ do_main_loop(void)
   /* Update consensus diffs. */
   if (directory_caches_dir_info(options)) {
     tor_mmap_t *cons;
+    dirserv_refresh_stored_consensuses();
     cons = networkstatus_get_latest_consensus_mmap_by_flavor(FLAV_NS);
     if (cons) {
       dirserv_update_consensus_diffs(cons->data, "ns");

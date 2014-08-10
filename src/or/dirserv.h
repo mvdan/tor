@@ -32,6 +32,12 @@
 /** Maximum allowable length of a version line in a networkstatus. */
 #define MAX_V_LINE_LEN 128
 
+typedef struct old_cached_consensus_t {
+  time_t valid_after;
+  tor_mmap_t *diff_mmap;
+  consensus_flavor_t flavor;
+} old_cached_consensus_t;
+
 int connection_dirserv_flushed_some(dir_connection_t *conn);
 
 int dirserv_add_own_fingerprint(const char *nickname, crypto_pk_t *pk);
@@ -64,12 +70,10 @@ int directory_too_idle_to_fetch_descriptors(const or_options_t *options,
 
 cached_dir_t *dirserv_get_consensus(const char *flavor_name);
 char * dirserv_get_stored_consensus(const char *flavor, const char *digest);
-smartlist_t * dirserv_list_stored_consensuses(const char *flavor);
+void dirserv_remove_old_consensuses(void);
+void dirserv_refresh_stored_consensuses(void);
 int dirserv_store_consensus(const char *consensus, const char *flavor,
-                            const char *digest);
-int dirserv_store_consensus_diff(const char *consensus_diff,
-                                 const char *flavor,
-                                 const char *digest);
+                            const char *digest, time_t valid_after);
 int dirserv_update_consensus_diffs(const char *cur_consensus,
                                    const char *flavor);
 void dirserv_set_cached_consensus_networkstatus(const char *consensus,
