@@ -1515,8 +1515,7 @@ dirserv_update_consensus_diffs(const char *cur_consensus,
                  old_cached_consensus_t *, c) {
 
     char name[64], *consensus_fname, *stored_consensus;
-    char *diff, *consensus_diff_fname, *diff_compressed;
-    size_t comp_len;
+    char *diff, *consensus_diff_fname;
     smartlist_t *stored_consensus_sl, *diff_sl;
 
     if (c->flavor != flavor_id) continue;
@@ -1540,16 +1539,10 @@ dirserv_update_consensus_diffs(const char *cur_consensus,
     SMARTLIST_FOREACH(diff_sl, char *, cp, tor_free(cp));
     smartlist_free(diff_sl);
 
-    r = tor_gzip_compress(&diff_compressed, &comp_len,
-                          diff, strlen(diff),
-                          ZLIB_METHOD);
-    tor_free(diff);
-    if (r<0) break;
     consensus_diff_fname = get_datadir_fname2(flavdir_diff, name);
-    r = write_bytes_to_file(consensus_diff_fname, diff_compressed,
-                            comp_len, 1);
+    r = write_str_to_file(consensus_diff_fname, diff, 0);
     tor_free(consensus_diff_fname);
-    tor_free(diff_compressed);
+    tor_free(diff);
     if (r<0) break;
 
   } STRMAP_FOREACH_END;
