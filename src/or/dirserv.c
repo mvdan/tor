@@ -1416,14 +1416,21 @@ dirserv_store_consensus(const char *consensus, const char *flavor,
                         const char *digest, time_t valid_after)
 {
   char *consensus_fname, flavdir[64], name[64];
+  char *consensus_compressed;
+  size_t comp_len;
   int r;
   tor_snprintf(flavdir, sizeof(flavdir),
                "%s-%s", OLD_CACHED_CONS_DIRNAME, flavor);
   if (check_or_create_data_subdir(flavdir) != 0) return -1;
   tor_snprintf(name, 64, "%li-%s", valid_after, digest);
+  if (tor_gzip_compress(&consensus_compressed, &comp_len,
+                        consensus, strlen(consensus),
+                        ZLIB_METHOD)<0) return -1;
   consensus_fname = get_datadir_fname2(flavdir, name);
-  r = write_str_to_file(consensus_fname, consensus, 0);
+  r = write_bytes_to_file(consensus_fname, consensus_compressed,
+                          comp_len, 1);
   tor_free(consensus_fname);
+  tor_free(consensus_compressed);
   return r;
 }
 
@@ -1508,7 +1515,8 @@ dirserv_update_consensus_diffs(const char *cur_consensus,
                  old_cached_consensus_t *, c) {
 
     char name[64], *consensus_fname, *stored_consensus;
-    char *diff, *consensus_diff_fname;
+    char *diff, *consensus_diff_fname, *diff_compressed;
+    size_t comp_len;
     smartlist_t *stored_consensus_sl, *diff_sl;
 
     if (c->flavor != flavor_id) continue;
@@ -1532,10 +1540,16 @@ dirserv_update_consensus_diffs(const char *cur_consensus,
     SMARTLIST_FOREACH(diff_sl, char *, cp, tor_free(cp));
     smartlist_free(diff_sl);
 
-    consensus_diff_fname = get_datadir_fname2(flavdir_diff, name);
-    r = write_str_to_file(consensus_diff_fname, diff, 0);
-    tor_free(consensus_diff_fname);
+    r = tor_gzip_compress(&diff_compressed, &comp_len,
+                          diff, strlen(diff),
+                          ZLIB_METHOD);
     tor_free(diff);
+    if (r<0) break;
+    consensus_diff_fname = get_datadir_fname2(flavdir_diff, name);
+    r = write_bytes_to_file(consensus_diff_fname, diff_compressed,
+                            comp_len, 1);
+    tor_free(consensus_diff_fname);
+    tor_free(diff_compressed);
     if (r<0) break;
 
   } STRMAP_FOREACH_END;
