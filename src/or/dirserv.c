@@ -1541,6 +1541,8 @@ dirserv_update_consensus_diffs(const char *cur_consensus,
 
     consensus_diff_fname = get_datadir_fname2(flavdir_diff, name);
     r = write_str_to_file(consensus_diff_fname, diff, 0);
+    tor_munmap_file(c->diff_mmap);
+    c->diff_mmap = tor_mmap_file(consensus_diff_fname);
     tor_free(consensus_diff_fname);
     tor_free(diff);
     if (r<0) break;
