@@ -1344,18 +1344,6 @@ dirserv_get_consensus(const char *flavor_name)
 #define OLD_CACHED_CONS_DIRNAME "old-cached-consensuses"
 #define OLD_CACHED_CONS_DIFFS_DIRNAME "old-cached-consensus-diffs"
 
-char *
-dirserv_get_stored_consensus(const char *flavor, const char *digest)
-{
-  char *consensus_fname, flavdir[64], *consensus;
-  tor_snprintf(flavdir, sizeof(flavdir),
-               "%s-%s", OLD_CACHED_CONS_DIRNAME, flavor);
-  consensus_fname = get_datadir_fname2(flavdir, digest);
-  consensus = read_file_to_str(consensus_fname, 0, NULL);
-  tor_free(consensus_fname);
-  return consensus;
-}
-
 void
 dirserv_refresh_stored_consensuses()
 {
@@ -1514,17 +1502,26 @@ dirserv_update_consensus_diffs(const char *cur_consensus,
   STRMAP_FOREACH(old_cached_consensus_by_digest, digest,
                  old_cached_consensus_t *, c) {
 
-    char name[64], *consensus_fname, *stored_consensus;
+    char name[64], *consensus_fname;
+    char *stored_consensus_comp, *stored_consensus;
     char *diff, *consensus_diff_fname;
     smartlist_t *stored_consensus_sl, *diff_sl;
+    struct stat comp_stat;
+    size_t stored_consensus_len;
 
     if (c->flavor != flavor_id) continue;
+    r = -1;
 
     tor_snprintf(name, 64, "%li-%s", c->valid_after, digest);
     consensus_fname = get_datadir_fname2(flavdir, name);
-    stored_consensus = read_file_to_str(consensus_fname, 0, NULL);
+    stored_consensus_comp = read_file_to_str(consensus_fname,
+                                             RFTS_BIN, &comp_stat);
     tor_free(consensus_fname);
-    r = -1;
+    if (!stored_consensus_comp) break;
+    r = tor_gzip_uncompress(&stored_consensus, &stored_consensus_len,
+                            stored_consensus_comp, comp_stat.st_size,
+                            ZLIB_METHOD, 1, LOG_PROTOCOL_WARN);
+    tor_free(stored_consensus_comp);
 
     stored_consensus_sl = smartlist_new();
     tor_split_lines(stored_consensus_sl, stored_consensus,
