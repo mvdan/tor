@@ -3398,6 +3398,61 @@ tor_listdir(const char *dirname)
   return result;
 }
 
+/* Remove a directory and all of its contents recursively. Return 0 on
+ * success, -1 on failure. On failure, any of the contents may have already
+ * been deleted. If the path specified by dirname doesn't exist, we assume
+ * success.
+ */
+int
+tor_rmdir(const char *dirname)
+{
+  int r=0;
+  smartlist_t *elements;
+  struct stat st;
+
+  r = stat(dirname, &st);
+
+  if (r<0) {
+    // Dir doesn't exist, nothing to do
+    if (errno&ENOENT) return 0;
+    log_warn(LD_FS, "Error stat()ing dir '%s': %s", dirname,
+             strerror(errno));
+    return -1;
+  }
+  if (!st.st_mode&S_IFDIR) {
+    log_warn(LD_FS, "Path doesn't correspond to a directory: '%s'",
+             dirname);
+    return -1;
+  }
+
+  elements = tor_listdir(dirname);
+  if (!elements) return -1;
+
+  SMARTLIST_FOREACH_BEGIN(elements, const char *, cp) {
+    char *tmp = NULL;
+    tor_asprintf(&tmp, "%s"PATH_SEPARATOR"%s", dirname, cp);
+    if (0 == stat(tmp,&st) && (st.st_mode & S_IFDIR)) {
+      if ((r=tor_rmdir(tmp))<0)
+        log_warn(LD_FS, "Error removing directory '%s': %s", tmp,
+                 strerror(errno));
+    } else {
+      if ((r=unlink(tmp))<0)
+        log_warn(LD_FS, "Error removing file '%s': %s", tmp,
+                 strerror(errno));
+    }
+    tor_free(tmp);
+    if (r<0) break;
+  } SMARTLIST_FOREACH_END(cp);
+  SMARTLIST_FOREACH(elements, char *, cp, tor_free(cp));
+  smartlist_free(elements);
+  if (r<0) return r;
+  if ((r=rmdir(dirname))<0) {
+    log_warn(LD_FS, "Error removing directory '%s': %s", dirname,
+             strerror(errno));
+  }
+  return r;
+}
+
 /** Return true iff <b>filename</b> is a relative path. */
 int
 path_is_relative(const char *filename)

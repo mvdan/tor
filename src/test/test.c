@@ -149,34 +149,6 @@ get_fname(const char *name)
   return buf;
 }
 
-/* Remove a directory and all of its subdirectories */
-static void
-rm_rf(const char *dir)
-{
-  struct stat st;
-  smartlist_t *elements;
-
-  elements = tor_listdir(dir);
-  if (elements) {
-    SMARTLIST_FOREACH_BEGIN(elements, const char *, cp) {
-         char *tmp = NULL;
-         tor_asprintf(&tmp, "%s"PATH_SEPARATOR"%s", dir, cp);
-         if (0 == stat(tmp,&st) && (st.st_mode & S_IFDIR)) {
-           rm_rf(tmp);
-         } else {
-           if (unlink(tmp)) {
-             fprintf(stderr, "Error removing %s: %s\n", tmp, strerror(errno));
-           }
-         }
-         tor_free(tmp);
-    } SMARTLIST_FOREACH_END(cp);
-    SMARTLIST_FOREACH(elements, char *, cp, tor_free(cp));
-    smartlist_free(elements);
-  }
-  if (rmdir(dir))
-    fprintf(stderr, "Error removing directory %s: %s\n", dir, strerror(errno));
-}
-
 /** Remove all files stored under the temporary directory, and the directory
  * itself.  Called by atexit(). */
 static void
@@ -187,7 +159,7 @@ remove_directory(void)
     return;
   }
 
-  rm_rf(temp_dir);
+  tor_rmdir(temp_dir);
 }
 
 /** Define this if unit tests spend too much time generating public keys*/

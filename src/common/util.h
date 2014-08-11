@@ -405,6 +405,7 @@ const char *parse_config_line_from_str_verbose(const char *line,
   parse_config_line_from_str_verbose((line),(key_out),(value_out),NULL)
 char *expand_filename(const char *filename);
 struct smartlist_t *tor_listdir(const char *dirname);
+int tor_rmdir(const char *dirname);
 int path_is_relative(const char *filename);
 
 /* Process helpers */
