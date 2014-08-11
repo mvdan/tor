@@ -1570,6 +1570,11 @@ load_downloaded_routers(const char *body, smartlist_t *which,
   return added;
 }
 
+/** Given the result of DIR_PURPOSE_FETCH_CONSENSUS, resolve the final
+ * consensus. The body may be a consensus diff to be applied to our currently
+ * cached consensus, but it may also be the new consensus as a whole if the
+ * server could not provide us with a diff (or didn't know yet how to do so).
+ */
 static char *
 resolve_fetched_consensus(const char *body, size_t body_len,
                           const char *flavor)

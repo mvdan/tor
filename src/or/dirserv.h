@@ -32,6 +32,8 @@
 /** Maximum allowable length of a version line in a networkstatus. */
 #define MAX_V_LINE_LEN 128
 
+/** Encapsulates useful info about old cached consensuses, to be used
+ * later on when serving consensus diffs. */
 typedef struct old_cached_consensus_t {
   time_t valid_after;
   tor_mmap_t *diff_mmap;

@@ -1977,7 +1977,6 @@ do_main_loop(void)
   if (router_reload_router_list()) {
     return -1;
   }
-
   /* load the networkstatuses. (This launches a download for new routers as
    * appropriate.)
    */

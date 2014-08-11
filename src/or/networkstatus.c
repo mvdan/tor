@@ -1007,8 +1007,9 @@ networkstatus_get_latest_consensus_by_flavor(consensus_flavor_t f)
   }
 }
 
-/** Return the latest consensus memory mapping we have whose flavor matches
- * <b>f</b>, or NULL if we don't have one. */
+/** Like networkstatus_get_latest_consensus_by_flavor, but return a mmap of
+ * the cached file on disk (uncompressed) instead of the full parsed
+ * networkstatus_t struct. */
 tor_mmap_t *
 networkstatus_get_latest_consensus_mmap_by_flavor(consensus_flavor_t f)
 {

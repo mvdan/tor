@@ -100,6 +100,8 @@ typedef struct authdir_config_t {
 /** Should be static; exposed for testing. */
 static authdir_config_t *fingerprint_list = NULL;
 
+/** Maps HEX_SHA256 digests of old cached consensuses to their
+ * encapsulated info. */
 static strmap_t *old_cached_consensus_by_digest = NULL;
 
 /** Allocate and return a new, empty, authdir_config_t. */
@@ -1344,6 +1346,8 @@ dirserv_get_consensus(const char *flavor_name)
 #define OLD_CACHED_CONS_DIRNAME "old-cached-consensuses"
 #define OLD_CACHED_CONS_DIFFS_DIRNAME "old-cached-consensus-diffs"
 
+/** Reads what old consensuses and diffs have we got cached on disk and
+ * updates old_cached_consensus_by_digest accordingly. */
 void
 dirserv_refresh_stored_consensuses()
 {
@@ -1399,6 +1403,8 @@ dirserv_refresh_stored_consensuses()
   }
 }
 
+/** Saves a newly downloaded consensus in its appropriate old cached consensus
+ * by its flavor, compressed via zlib. */
 int
 dirserv_store_consensus(const char *consensus, const char *flavor,
                         const char *digest, time_t valid_after)
@@ -1433,6 +1439,9 @@ dirserv_store_consensus(const char *consensus, const char *flavor,
 // A week for now
 #define KEEP_OLD_CONSENSUSES_INTERVAL (7*24*60*60)
 
+/* Iterates through all cached old consensuses and removes those that are
+ * older than KEEP_OLD_CONSENSUSES_INTERVAL to keep the overall disk usage
+ * down. */
 void
 dirserv_remove_old_consensuses()
 {
@@ -1474,6 +1483,9 @@ dirserv_remove_old_consensuses()
   } SMARTLIST_FOREACH_END(c);
 }
 
+/** Updates all cached consensus diffs of a certain flavor given a consensus
+ * diff. Writes the newly created consensus diffs to disk using zlib. Updates
+ * old_cached_consensus_by_digest with the new diff file mmaps accordingly. */
 int
 dirserv_update_consensus_diffs(const char *cur_consensus,
                                const char *flavor)
