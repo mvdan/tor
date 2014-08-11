@@ -1503,7 +1503,6 @@ dirserv_update_consensus_diffs(const char *cur_consensus,
   tor_split_lines(cur_consensus_sl, cur_consensus_dup,
       (int)strlen(cur_consensus_dup));
 
-
   tor_snprintf(flavdir, sizeof(flavdir),
                "%s-%s", OLD_CACHED_CONS_DIRNAME, flavor);
 

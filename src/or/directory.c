@@ -1570,6 +1570,71 @@ load_downloaded_routers(const char *body, smartlist_t *which,
   return added;
 }
 
+static char *
+resolve_fetched_consensus(const char *body, size_t body_len,
+                          const char *flavor)
+{
+  char *base_consensus, *consensus;
+  char base_consensus_digest_hex[HEX_DIGEST256_LEN+1];
+  char consensus_digest_hex[HEX_DIGEST256_LEN+1];
+  smartlist_t *base_consensus_lines, *body_lines;
+  smartlist_t *diff_result = NULL;
+  char *body_dup = tor_strdup(body);
+  body_lines = smartlist_new();
+  tor_split_lines(body_lines, body_dup, (int)body_len);
+
+  /* Is a consensus diff. */
+  if (consdiff_get_digests(body_lines,
+                           NULL, base_consensus_digest_hex,
+                           NULL, consensus_digest_hex) == 0) {
+    tor_mmap_t *cons_mmap;
+    if (!strcmp(flavor, "microdesc")) {
+      cons_mmap = networkstatus_get_latest_consensus_mmap_by_flavor(
+          FLAV_MICRODESC);
+    } else {
+      cons_mmap = networkstatus_get_latest_consensus_mmap_by_flavor(
+          FLAV_NS);
+    }
+    if (!cons_mmap) {
+      log_warn(LD_DIR,
+          "Could not fetch the memory mapped consensus to apply "
+          "the consensus diff to.");
+      tor_free(body_dup); smartlist_free(body_lines);
+      return NULL;
+    }
+    base_consensus = tor_strndup(cons_mmap->data, cons_mmap->size);
+    tor_free(cons_mmap);
+    base_consensus_lines = smartlist_new();
+    tor_split_lines(base_consensus_lines, base_consensus,
+        (int)strlen(base_consensus));
+    diff_result = consdiff_apply_diff(base_consensus_lines, body_lines);
+    tor_free(base_consensus); smartlist_free(base_consensus_lines);
+
+  /* Is a plain old consensus. */
+  } else {
+    char consensus_digest[DIGEST256_LEN];
+    crypto_digest_t *d = crypto_digest256_new(DIGEST_SHA256);
+    crypto_digest_add_bytes(d, body, strlen(body));
+    crypto_digest_get_digest(d, consensus_digest, DIGEST256_LEN);
+    crypto_digest_free(d);
+    base16_encode(consensus_digest_hex, HEX_DIGEST256_LEN+1,
+                  consensus_digest, DIGEST256_LEN);
+  }
+  tor_free(body_dup); smartlist_free(body_lines);
+  if (diff_result) {
+    log_info(LD_DIR,"Fetched consensus (size %d) turned out to be "
+             "a diff and was applied successfully.", (int)body_len);
+    consensus = smartlist_join_strings(diff_result, "\n", 1, NULL);
+    SMARTLIST_FOREACH(diff_result, char *, cp, tor_free(cp));
+    smartlist_free(diff_result);
+  } else {
+    log_info(LD_DIR,"Successfully applied consensus diff (size %d)",
+             (int)body_len);
+    consensus = tor_strdup(body);
+  }
+  return consensus;
+}
+
 /** We are a client, and we've finished reading the server's
  * response. Parse it and act appropriately.
  *
@@ -1752,8 +1817,7 @@ connection_dir_client_reached_eof(dir_connection_t *conn)
   if (conn->base_.purpose == DIR_PURPOSE_FETCH_CONSENSUS) {
     int r;
     const char *flavname = conn->requested_resource;
-    char *consensus, consensus_digest_hex[HEX_DIGEST256_LEN+1];
-    smartlist_t *diff_result = NULL;
+    char *consensus;
     if (status_code != 200) {
       int severity = (status_code == 304) ? LOG_INFO : LOG_WARN;
       tor_log(severity, LD_DIR,
@@ -1765,65 +1829,14 @@ connection_dir_client_reached_eof(dir_connection_t *conn)
       networkstatus_consensus_download_failed(status_code, flavname);
       return -1;
     }
-    {
-      char *base_consensus, base_consensus_digest_hex[HEX_DIGEST256_LEN+1];
-      smartlist_t *base_consensus_lines, *body_lines;
-      char *body_dup = tor_strdup(body);
-      body_lines = smartlist_new();
-      tor_split_lines(body_lines, body_dup, (int)body_len);
-
-      /* Is a consensus diff. */
-      if (consdiff_get_digests(body_lines,
-                               NULL, base_consensus_digest_hex,
-                               NULL, consensus_digest_hex) == 0) {
-        tor_mmap_t *cons_mmap;
-        if (!strcmp(flavname, "microdesc")) {
-          cons_mmap = networkstatus_get_latest_consensus_mmap_by_flavor(
-              FLAV_MICRODESC);
-        } else {
-          cons_mmap = networkstatus_get_latest_consensus_mmap_by_flavor(
-              FLAV_NS);
-        }
-        if (!cons_mmap) {
-          log_warn(LD_DIR,
-              "Could not fetch the memory mapped consensus to apply "
-              "the consensus diff to.");
-          tor_free(body_dup); smartlist_free(body_lines);
-          tor_free(body); tor_free(headers); tor_free(reason);
-          networkstatus_consensus_download_failed(0, flavname);
-          return -1;
-        }
-        base_consensus = tor_strndup(cons_mmap->data, cons_mmap->size);
-        tor_free(cons_mmap);
-        base_consensus_lines = smartlist_new();
-        tor_split_lines(base_consensus_lines, base_consensus,
-            (int)strlen(base_consensus));
-        diff_result = consdiff_apply_diff(base_consensus_lines, body_lines);
-        tor_free(base_consensus); smartlist_free(base_consensus_lines);
-
-      /* Is a plain old consensus. */
-      } else {
-        char consensus_digest[DIGEST256_LEN];
-        crypto_digest_t *d = crypto_digest256_new(DIGEST_SHA256);
-        crypto_digest_add_bytes(d, body, strlen(body));
-        crypto_digest_get_digest(d, consensus_digest, DIGEST256_LEN);
-        crypto_digest_free(d);
-        base16_encode(consensus_digest_hex, HEX_DIGEST256_LEN+1,
-                      consensus_digest, DIGEST256_LEN);
-      }
-      tor_free(body_dup); smartlist_free(body_lines);
+    consensus = resolve_fetched_consensus(body, body_len, flavname);
+    if (!consensus) {
+      tor_free(body); tor_free(headers); tor_free(reason);
+      networkstatus_consensus_download_failed(0, flavname);
+      return -1;
     }
-    if (diff_result) {
-      consensus = smartlist_join_strings(diff_result, "\n", 1, NULL);
-      log_info(LD_DIR,"Received consensus directory diff (size %d) "
-               "from server '%s:%d'",
-               (int)body_len, conn->base_.address, conn->base_.port);
-    } else {
-      consensus = body;
-      log_info(LD_DIR,"Received consensus directory (size %d) "
-               "from server '%s:%d'",
-               (int)body_len, conn->base_.address, conn->base_.port);
-    }
+    log_info(LD_DIR,"Received consensus directory from server '%s:%d'",
+             conn->base_.address, conn->base_.port);
     if ((r=networkstatus_set_current_consensus(consensus, flavname, 0))<0) {
       log_fn(r<-1?LOG_WARN:LOG_INFO, LD_DIR,
              "Unable to load %s consensus directory downloaded from "
