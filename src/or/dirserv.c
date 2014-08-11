@@ -1485,7 +1485,10 @@ dirserv_remove_old_consensuses()
 
 /** Updates all cached consensus diffs of a certain flavor given a consensus
  * diff. Writes the newly created consensus diffs to disk using zlib. Updates
- * old_cached_consensus_by_digest with the new diff file mmaps accordingly. */
+ * old_cached_consensus_by_digest with the new diff file mmaps accordingly.
+ * To make sure no diffs stay around forever, and since all diffs are
+ * regenerated and written to disk again anyway, the complete directory will
+ * be removed first. */
 int
 dirserv_update_consensus_diffs(const char *cur_consensus,
                                const char *flavor)
@@ -1498,7 +1501,8 @@ dirserv_update_consensus_diffs(const char *cur_consensus,
 
   tor_snprintf(flavdir_diff, sizeof(flavdir_diff),
                OLD_CACHED_CONS_DIFFS_DIRNAME"-%s", flavor);
-  if (unlink(flavdir_diff)<0) return -1;
+  // TODO: tor_rmdir?
+  /*if (unlink(flavdir_diff)<0) return -1;*/ 
   if (check_or_create_data_subdir(flavdir_diff)<0) return -1;
 
   if (!strcmp(flavor, "ns")) flavor_id = FLAV_NS;
