@@ -1842,12 +1842,14 @@ connection_dir_client_reached_eof(dir_connection_t *conn)
     }
     log_info(LD_DIR,"Received consensus directory from server '%s:%d'",
              conn->base_.address, conn->base_.port);
-    if ((r=networkstatus_set_current_consensus(consensus, flavname, 0))<0) {
+    r=networkstatus_set_current_consensus(consensus, flavname, 0);
+    tor_free(consensus);
+    if (r<0) {
       log_fn(r<-1?LOG_WARN:LOG_INFO, LD_DIR,
              "Unable to load %s consensus directory downloaded from "
              "server '%s:%d'. I'll try again soon.",
              flavname, conn->base_.address, conn->base_.port);
-      tor_free(consensus); tor_free(headers); tor_free(reason);
+      tor_free(body); tor_free(headers); tor_free(reason);
       networkstatus_consensus_download_failed(0, flavname);
       return -1;
     }
