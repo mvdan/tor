@@ -1501,7 +1501,7 @@ dirserv_update_consensus_diffs(const char *cur_consensus,
 
   tor_snprintf(flavdir_diff, sizeof(flavdir_diff),
                OLD_CACHED_CONS_DIFFS_DIRNAME"-%s", flavor);
-  /*if (tor_rmdir(flavdir_diff)<0) return -1;*/
+  if (tor_rmdir(flavdir_diff)<0) return -1;
   if (check_or_create_data_subdir(flavdir_diff)<0) return -1;
 
   if (!strcmp(flavor, "ns")) flavor_id = FLAV_NS;

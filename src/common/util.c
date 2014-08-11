@@ -3150,6 +3150,45 @@ tor_listdir(const char *dirname)
   return result;
 }
 
+/* Remove a directory and all of its contents recursively. Return 0 on
+ * success, -1 on failure. On failure, any of the contents may have already
+ * been deleted.
+ */
+int
+tor_rmdir(const char *dirname)
+{
+  smartlist_t *elements = tor_listdir(dirname);
+
+  if (elements) {
+    int r=0;
+    SMARTLIST_FOREACH_BEGIN(elements, const char *, cp) {
+      char *tmp = NULL;
+      struct stat st;
+      tor_asprintf(&tmp, "%s"PATH_SEPARATOR"%s", dirname, cp);
+      if (0 == stat(tmp,&st) && (st.st_mode & S_IFDIR)) {
+        if ((r=tor_rmdir(tmp))<0)
+          log_warn(LD_FS, "Error removing directory '%s': %s", tmp,
+                   strerror(errno));
+      } else {
+        if ((r=unlink(tmp))<0)
+          log_warn(LD_FS, "Error removing file '%s': %s", tmp,
+                   strerror(errno));
+      }
+      tor_free(tmp);
+      if (r<0) break;
+    } SMARTLIST_FOREACH_END(cp);
+    SMARTLIST_FOREACH(elements, char *, cp, tor_free(cp));
+    smartlist_free(elements);
+    if (r<0) return r;
+  }
+  if (rmdir(dirname)<0) {
+    log_warn(LD_FS, "Error removing directory '%s': %s", dirname,
+             strerror(errno));
+    return -1;
+  }
+  return 0;
+}
+
 /** Return true iff <b>filename</b> is a relative path. */
 int
 path_is_relative(const char *filename)
