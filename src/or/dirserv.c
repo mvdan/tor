@@ -1466,11 +1466,11 @@ dirserv_remove_old_consensuses()
         diff_fname = get_datadir_fname2(
                   OLD_CACHED_CONS_DIFFS_DIRNAME"-microdesc", name);
       }
-      if (unlink(consensus_fname) != 0) {
+      if (unlink(consensus_fname)<0) {
         log_warn(LD_FS, "Failed to unlink %s: %s",
                  consensus_fname, strerror(errno));
       }
-      if (unlink(diff_fname) != 0) {
+      if (unlink(diff_fname)<0) {
         log_warn(LD_FS, "Failed to unlink %s: %s",
                  diff_fname, strerror(errno));
       }
@@ -1498,7 +1498,8 @@ dirserv_update_consensus_diffs(const char *cur_consensus,
 
   tor_snprintf(flavdir_diff, sizeof(flavdir_diff),
                OLD_CACHED_CONS_DIFFS_DIRNAME"-%s", flavor);
-  if (check_or_create_data_subdir(flavdir_diff) != 0) return -1;
+  if (unlink(flavdir_diff)<0) return -1;
+  if (check_or_create_data_subdir(flavdir_diff)<0) return -1;
 
   if (!strcmp(flavor, "ns")) flavor_id = FLAV_NS;
   else flavor_id = FLAV_MICRODESC;
