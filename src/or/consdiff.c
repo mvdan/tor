@@ -477,7 +477,9 @@ gen_ed_diff(smartlist_t *cons1, smartlist_t *cons2)
        * reach a hash that is no longer the lower one. Since there will always
        * be a lower hash for as long as the loop runs, one of the two indexes
        * will always be incremented, thus assuring that the loop must end
-       * after a finite number of iterations.
+       * after a finite number of iterations. If that cannot be because said
+       * consensus has already reached the end, both are extended to their
+       * respecting ends since we are done.
        */
       int cmp = base64cmp(hash1, hash2);
       while (cmp != 0) {
@@ -498,8 +500,7 @@ gen_ed_diff(smartlist_t *cons1, smartlist_t *cons2)
                 "sorted properly.");
             goto error_cleanup;
           }
-        }
-        if (i2 < len2 && cmp > 0) {
+        } else if (i2 < len2 && cmp > 0) {
           i2 = next_router(cons2, i2);
           if (i2 == len2) {
             /* We finished the second consensus, so grab all the remaining
@@ -516,6 +517,10 @@ gen_ed_diff(smartlist_t *cons1, smartlist_t *cons2)
                 "sorted properly.");
             goto error_cleanup;
           }
+        } else {
+          i1 = len1;
+          i2 = len2;
+          break;
         }
         cmp = base64cmp(hash1, hash2);
       }
