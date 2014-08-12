@@ -32,6 +32,7 @@
 
 #include "or.h"
 #include "consdiff.h"
+#include "routerparse.h"
 
 /** Create (allocate) a new slice from a smartlist. Assumes that the start
  * and the end indexes are within the bounds of the initial smartlist. The end
@@ -280,7 +281,7 @@ get_id_hash(const char *r_line)
 
   /* Skip the router name. */
   hash = strchr(r_line, ' ');
-  if (hash == NULL) return NULL;
+  if (!hash) return NULL;
 
   hash++;
   hash_end = hash;
@@ -334,9 +335,9 @@ base64cmp(const char *hash1, const char *hash2)
 {
   const unsigned char *a, *b;
   /* NULL is always lower, useful for last_hash which starts at NULL. */
-  if (hash1 == NULL && hash2 == NULL) return 0;
-  if (hash1 == NULL) return -1;
-  if (hash2 == NULL) return 1;
+  if (!hash1 && !hash2) return 0;
+  if (!hash1) return -1;
+  if (!hash2) return 1;
 
   /* Don't index with a char; char may be signed. */
   a = (unsigned char*)hash1;
@@ -365,24 +366,6 @@ base64cmp(const char *hash1, const char *hash2)
       ++b;
     }
   }
-}
-
-/** Given a list of strings in <b>lst</b>, set the SHA256 digest at
- * <b>digest_out</b> to the hash of the concatenation of those strings, plus
- * the optional string <b>end</b> to be added after each string.
- */
-static void
-crypto_digest_smartlist_ends(char *digest_out, const smartlist_t *lst,
-                             const char *end)
-{
-  crypto_digest_t *d = crypto_digest256_new(DIGEST_SHA256);
-  SMARTLIST_FOREACH_BEGIN(lst, const char *, cp) {
-    crypto_digest_add_bytes(d, cp, strlen(cp));
-    if (end)
-      crypto_digest_add_bytes(d, end, strlen(end));
-  } SMARTLIST_FOREACH_END(cp);
-  crypto_digest_get_digest(d, digest_out, DIGEST256_LEN);
-  crypto_digest_free(d);
 }
 
 /** Generate an ed diff as a smartlist from two consensuses, also given as
@@ -751,18 +734,17 @@ apply_ed_diff(smartlist_t *cons1, smartlist_t *diff)
  * up to the caller to free their resources.
  */
 smartlist_t *
-consdiff_gen_diff(smartlist_t *cons1, smartlist_t *cons2)
+consdiff_gen_diff(smartlist_t *cons1, smartlist_t *cons2,
+                  digests_t *digests1, digests_t *digests2)
 {
   smartlist_t *ed_diff, *ed_cons2, *result;
   int cons2_eq;
-  char cons1_hash[DIGEST256_LEN];
-  char cons2_hash[DIGEST256_LEN];
   char cons1_hash_hex[HEX_DIGEST256_LEN+1];
   char cons2_hash_hex[HEX_DIGEST256_LEN+1];
 
   ed_diff = gen_ed_diff(cons1, cons2);
   /* ed diff could not be generated - reason already logged by gen_ed_diff. */
-  if (ed_diff == NULL) return NULL;
+  if (!ed_diff) return NULL;
 
   /* See that the script actually produces what we want. */
   ed_cons2 = apply_ed_diff(cons1, ed_diff);
@@ -783,13 +765,10 @@ consdiff_gen_diff(smartlist_t *cons1, smartlist_t *cons2)
     return NULL;
   }
 
-  /* Calculate the digests. */
-  crypto_digest_smartlist_ends(cons1_hash, cons1, "\n");
-  crypto_digest_smartlist_ends(cons2_hash, cons2, "\n");
   base16_encode(cons1_hash_hex, HEX_DIGEST256_LEN+1,
-      cons1_hash, DIGEST256_LEN);
+      digests1->d[DIGEST_SHA256], DIGEST256_LEN);
   base16_encode(cons2_hash_hex, HEX_DIGEST256_LEN+1,
-      cons2_hash, DIGEST256_LEN);
+      digests2->d[DIGEST_SHA256], DIGEST256_LEN);
 
   /* Create the resulting consensus diff. */
   result = smartlist_new();
@@ -801,7 +780,9 @@ consdiff_gen_diff(smartlist_t *cons1, smartlist_t *cons2)
 }
 
 /** Fetch the digest of the base consensus in the consensus diff, encoded in
- * base16 as found in the diff itself.
+ * base16 as found in the diff itself. digest1 and digest2 must be of length
+ * DIGEST256_LEN or larger if not NULL. digest1_hex and digest2_hex must be of
+ * length HEX_DIGEST256_LEN or larger if not NULL.
  */
 int
 consdiff_get_digests(smartlist_t *diff,
@@ -850,9 +831,9 @@ consdiff_get_digests(smartlist_t *diff,
     goto error_cleanup;
   }
 
-  if (digest1_hex != NULL)
+  if (digest1_hex)
     strncpy(digest1_hex, cons1_hash_hex, HEX_DIGEST256_LEN+1);
-  if (digest2_hex != NULL)
+  if (digest2_hex)
     strncpy(digest2_hex, cons2_hash_hex, HEX_DIGEST256_LEN+1);
 
   if (base16_decode(cons1_hash, DIGEST256_LEN,
@@ -864,9 +845,9 @@ consdiff_get_digests(smartlist_t *diff,
     goto error_cleanup;
   }
 
-  if (digest1 != NULL)
+  if (digest1)
     strncpy(digest1, cons1_hash, DIGEST256_LEN);
-  if (digest2 != NULL)
+  if (digest2)
     strncpy(digest2, cons2_hash, DIGEST256_LEN);
 
   SMARTLIST_FOREACH(hash_words, char *, cp, tor_free(cp));
@@ -887,22 +868,23 @@ consdiff_get_digests(smartlist_t *diff,
  * could not be applied. Neither the consensus nor the diff are modified in
  * any way, so it's up to the caller to free their resources.
  */
-smartlist_t *
-consdiff_apply_diff(smartlist_t *cons1, smartlist_t *diff)
+char *
+consdiff_apply_diff(smartlist_t *cons1, smartlist_t *diff,
+                    digests_t *digests1)
 {
   smartlist_t *cons2 = NULL, *ed_diff;
+  char *cons2_str = NULL;
+  digests_t cons2_digests;
   char e_cons1_hash[DIGEST256_LEN];
   char e_cons2_hash[DIGEST256_LEN];
-  char cons1_hash[DIGEST256_LEN];
-  char cons2_hash[DIGEST256_LEN];
 
   if (consdiff_get_digests(diff,
         e_cons1_hash, NULL, e_cons2_hash, NULL) != 0)
     goto error_cleanup;
 
   /* See that the consensus that was given to us matches its hash. */
-  crypto_digest_smartlist_ends(cons1_hash, cons1, "\n");
-  if (memcmp(cons1_hash, e_cons1_hash, DIGEST256_LEN*sizeof(char)) != 0) {
+  if (memcmp(digests1->d[DIGEST_SHA256], e_cons1_hash,
+             DIGEST256_LEN*sizeof(char)) != 0) {
     log_warn(LD_CONSDIFF, "Refusing to apply consensus diff because "
         "the base consensus doesn't match its own digest as found in "
         "the consensus diff header.");
@@ -920,24 +902,38 @@ consdiff_apply_diff(smartlist_t *cons1, smartlist_t *diff)
   cons2 = apply_ed_diff(cons1, ed_diff);
   tor_free(ed_diff);
   /* ed diff could not be applied - reason already logged by apply_ed_diff. */
-  if (cons2 == NULL) goto error_cleanup;
+  if (!cons2) goto error_cleanup;
+
+  cons2_str = smartlist_join_strings(cons2, "\n", 1, NULL);
+  SMARTLIST_FOREACH(cons2, char *, cp, tor_free(cp));
+  smartlist_free(cons2);
+
+  if (router_get_networkstatus_v3_hashes(cons2_str,
+                                         &cons2_digests)<0) {
+    log_warn(LD_CONSDIFF, "Could not compute digests of the consensus "
+        "resulting from applying a consensus diff.");
+    goto error_cleanup;
+  }
 
   /* See that the resulting consensus matches its hash. */
-  crypto_digest_smartlist_ends(cons2_hash, cons2, "\n");
-  if (memcmp(cons2_hash, e_cons2_hash, DIGEST256_LEN*sizeof(char)) != 0) {
+  if (memcmp(cons2_digests.d[DIGEST_SHA256], e_cons2_hash,
+             DIGEST256_LEN*sizeof(char)) != 0) {
     log_warn(LD_CONSDIFF, "Refusing to apply consensus diff because "
         "the resulting consensus doesn't match its own digest as found in "
         "the consensus diff header.");
     goto error_cleanup;
   }
 
-  return cons2;
+  return cons2_str;
 
   error_cleanup:
 
   if (cons2) {
     SMARTLIST_FOREACH(cons2, char *, cp, tor_free(cp));
     smartlist_free(cons2);
+  }
+  if (cons2_str) {
+    tor_free(cons2_str);
   }
 
   return NULL;

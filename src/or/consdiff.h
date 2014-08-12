@@ -17,11 +17,16 @@ typedef struct {
   int len;
 } smartlist_slice_t;
 
-smartlist_t *consdiff_gen_diff(smartlist_t *cons1, smartlist_t *cons2);
-smartlist_t *consdiff_apply_diff(smartlist_t *cons1, smartlist_t *diff);
-int consdiff_get_digests(smartlist_t *diff,
-                         char *digest1, char *digest1_hex,
-                         char *digest2, char *digest2_hex);
+smartlist_t *
+consdiff_gen_diff(smartlist_t *cons1, smartlist_t *cons2,
+                  digests_t *digests1, digests_t *digests2);
+char *
+consdiff_apply_diff(smartlist_t *cons1, smartlist_t *diff,
+                    digests_t *digests1);
+int
+consdiff_get_digests(smartlist_t *diff,
+                     char *digest1, char *digest1_hex,
+                     char *digest2, char *digest2_hex);
 
 #endif
 
