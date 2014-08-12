@@ -1599,29 +1599,25 @@ load_downloaded_routers(const char *body, smartlist_t *which,
  */
 static char *
 resolve_fetched_consensus(const char *body, size_t body_len,
-                          const char *flavor)
+                          const char *flavname)
 {
-  char *base_consensus, *consensus;
-  char base_consensus_digest_hex[HEX_DIGEST256_LEN+1];
+  char *base_cons, *consensus;
+  char base_cons_digest_hex[HEX_DIGEST256_LEN+1];
   char consensus_digest_hex[HEX_DIGEST256_LEN+1];
-  smartlist_t *base_consensus_lines, *body_lines;
-  smartlist_t *diff_result = NULL;
+  smartlist_t *base_cons_lines, *body_lines;
+  char *diff_result = NULL;
   char *body_dup = tor_strdup(body);
   body_lines = smartlist_new();
   tor_split_lines(body_lines, body_dup, (int)body_len);
 
   /* Is a consensus diff. */
   if (consdiff_get_digests(body_lines,
-                           NULL, base_consensus_digest_hex,
+                           NULL, base_cons_digest_hex,
                            NULL, consensus_digest_hex) == 0) {
+    networkstatus_t *c;
     tor_mmap_t *cons_mmap;
-    if (!strcmp(flavor, "microdesc")) {
-      cons_mmap = networkstatus_get_latest_consensus_mmap_by_flavor(
-          FLAV_MICRODESC);
-    } else {
-      cons_mmap = networkstatus_get_latest_consensus_mmap_by_flavor(
-          FLAV_NS);
-    }
+    consensus_flavor_t flavor = networkstatus_parse_flavor_name(flavname);
+    cons_mmap = networkstatus_get_latest_consensus_mmap_by_flavor(flavor);
     if (!cons_mmap) {
       log_warn(LD_DIR,
           "Could not fetch the memory mapped consensus to apply "
@@ -1629,33 +1625,22 @@ resolve_fetched_consensus(const char *body, size_t body_len,
       tor_free(body_dup); smartlist_free(body_lines);
       return NULL;
     }
-    base_consensus = tor_strndup(cons_mmap->data, cons_mmap->size);
+    c = networkstatus_get_latest_consensus_by_flavor(flavor);
+    base_cons = tor_strndup(cons_mmap->data, cons_mmap->size);
     tor_free(cons_mmap);
-    base_consensus_lines = smartlist_new();
-    tor_split_lines(base_consensus_lines, base_consensus,
-        (int)strlen(base_consensus));
-    diff_result = consdiff_apply_diff(base_consensus_lines, body_lines);
-    tor_free(base_consensus); smartlist_free(base_consensus_lines);
-
-  /* Is a plain old consensus. */
-  } else {
-    char consensus_digest[DIGEST256_LEN];
-    crypto_digest_t *d = crypto_digest256_new(DIGEST_SHA256);
-    crypto_digest_add_bytes(d, body, strlen(body));
-    crypto_digest_get_digest(d, consensus_digest, DIGEST256_LEN);
-    crypto_digest_free(d);
-    base16_encode(consensus_digest_hex, HEX_DIGEST256_LEN+1,
-                  consensus_digest, DIGEST256_LEN);
+    base_cons_lines = smartlist_new();
+    tor_split_lines(base_cons_lines, base_cons, (int)strlen(base_cons));
+    diff_result = consdiff_apply_diff(base_cons_lines, body_lines,
+                                      &c->digests);
+    tor_free(base_cons); smartlist_free(base_cons_lines);
+    tor_free(body_dup); smartlist_free(body_lines);
   }
-  tor_free(body_dup); smartlist_free(body_lines);
   if (diff_result) {
     log_info(LD_DIR,"Fetched consensus (size %d) turned out to be "
              "a diff and was applied successfully.", (int)body_len);
-    consensus = smartlist_join_strings(diff_result, "\n", 1, NULL);
-    SMARTLIST_FOREACH(diff_result, char *, cp, tor_free(cp));
-    smartlist_free(diff_result);
+    consensus = diff_result;
   } else {
-    log_info(LD_DIR,"Successfully applied consensus diff (size %d)",
+    log_info(LD_DIR,"Fetched consensus (size %d) doesn't seem to be a diff",
              (int)body_len);
     consensus = tor_strdup(body);
   }

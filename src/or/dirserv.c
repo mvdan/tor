@@ -1402,6 +1402,10 @@ dirserv_update_consensus_diffs(const char *cur_consensus,
   char *cur_consensus_dup;
   smartlist_t *cur_consensus_sl;
   consensus_flavor_t flavor;
+  digests_t cur_cons_digests;
+  if (router_get_networkstatus_v3_hashes(cur_consensus,
+                                         &cur_cons_digests)<0)
+    return -1;
 
   tor_snprintf(flavdir_diff, sizeof(flavdir_diff),
                OLD_CACHED_CONS_DIFFS_DIRNAME"-%s", flavname);
@@ -1428,6 +1432,7 @@ dirserv_update_consensus_diffs(const char *cur_consensus,
     struct stat comp_stat;
     size_t stored_consensus_len;
     size_t diff_len, diff_comp_len;
+    digests_t stored_cons_digests;
 
     if (c->flavor != flavor) continue;
     r = -1;
@@ -1443,11 +1448,18 @@ dirserv_update_consensus_diffs(const char *cur_consensus,
                             ZLIB_METHOD, 1, LOG_PROTOCOL_WARN);
     tor_free(stored_consensus_comp);
 
+    if ((r=router_get_networkstatus_v3_hashes(stored_consensus,
+                                           &stored_cons_digests))<0) {
+      tor_free(stored_consensus);
+      break;
+    }
+
     stored_consensus_sl = smartlist_new();
     tor_split_lines(stored_consensus_sl, stored_consensus,
         (int)strlen(stored_consensus));
 
-    diff_sl = consdiff_gen_diff(stored_consensus_sl, cur_consensus_sl);
+    diff_sl = consdiff_gen_diff(stored_consensus_sl, cur_consensus_sl,
+                             &stored_cons_digests, &cur_cons_digests);
     smartlist_free(stored_consensus_sl);
     tor_free(stored_consensus);
     if (!diff_sl) break;
