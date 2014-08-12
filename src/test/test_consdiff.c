@@ -394,7 +394,7 @@ test_consdiff_base64cmp(void)
 static void
 test_consdiff_gen_ed_diff(void)
 {
-  smartlist_t *cons1, *cons2, *diff;
+  smartlist_t *cons1=NULL, *cons2=NULL, *diff=NULL;
   int i;
   cons1 = smartlist_new();
   cons2 = smartlist_new();
@@ -558,7 +558,7 @@ test_consdiff_gen_ed_diff(void)
 static void
 test_consdiff_apply_ed_diff(void)
 {
-  smartlist_t *cons1, *cons2, *diff;
+  smartlist_t *cons1=NULL, *cons2=NULL, *diff=NULL;
   cons1 = smartlist_new();
   diff = smartlist_new();
 
@@ -703,94 +703,69 @@ test_consdiff_apply_ed_diff(void)
 }
 
 static void
-test_consdiff_crypto_digest_smartlist_ends(void)
-{
-  smartlist_t *sl = smartlist_new();
-  char digest[DIGEST256_LEN];
-  char e_digest1[DIGEST256_LEN] = {
-    0xf0, 0x39, 0x3f, 0xeb, 0xe8, 0xba, 0xaa, 0x55,
-    0xe3, 0x2f, 0x7b, 0xe2, 0xa7, 0xcc, 0x18, 0x0b,
-    0xf3, 0x4e, 0x52, 0x13, 0x7d, 0x99, 0xe0, 0x56,
-    0xc8, 0x17, 0xa9, 0xc0, 0x7b, 0x8f, 0x23, 0x9a };
-  char e_digest2[DIGEST256_LEN] = {
-    0x8b, 0x15, 0x83, 0xda, 0x45, 0xbf, 0x94, 0x54,
-    0xa0, 0x07, 0x84, 0x83, 0xf6, 0xf7, 0x6d, 0xcf,
-    0x62, 0x92, 0x9b, 0x57, 0xcc, 0x95, 0x03, 0x1d,
-    0x5b, 0x74, 0xa0, 0x73, 0x4a, 0x9a, 0x0b, 0xa6 };
-  char e_digest3[DIGEST256_LEN] = {
-    0x81, 0x20, 0x93, 0x64, 0x1e, 0xf1, 0x31, 0x82,
-    0x63, 0x4d, 0x34, 0x42, 0x98, 0x63, 0xaf, 0x76,
-    0xc3, 0xca, 0x41, 0x11, 0x78, 0x35, 0x6a, 0x45,
-    0x47, 0x2d, 0xbc, 0xce, 0xa7, 0x57, 0x74, 0xb1 };
-
-  smartlist_split_string(sl, "A:B:C:D:E", ":", 0, 0);
-  crypto_digest_smartlist_ends(digest, sl, "");
-  test_memeq(e_digest1, digest, DIGEST256_LEN*sizeof(char));
-
-  SMARTLIST_FOREACH(sl, char*, line, tor_free(line));
-  smartlist_clear(sl);
-  smartlist_split_string(sl, "A:B:C:D:E", ":", 0, 0);
-  crypto_digest_smartlist_ends(digest, sl, "\n");
-  test_memeq(e_digest2, digest, DIGEST256_LEN*sizeof(char));
-
-  SMARTLIST_FOREACH(sl, char*, line, tor_free(line));
-  smartlist_clear(sl);
-  smartlist_split_string(sl, "AA:B:CC:D:EEE", ":", 0, 0);
-  crypto_digest_smartlist_ends(digest, sl, "foobar");
-  test_memeq(e_digest3, digest, DIGEST256_LEN*sizeof(char));
-
- done:
-  if (sl) SMARTLIST_FOREACH(sl, char*, line, tor_free(line));
-  smartlist_free(sl);
-}
-
-static void
 test_consdiff_gen_diff(void)
 {
-  smartlist_t *cons1, *cons2, *diff;
+  char *cons1_str=NULL, *cons2_str=NULL;
+  smartlist_t *cons1=NULL, *cons2=NULL, *diff=NULL;
+  digests_t digests1, digests2;
   cons1 = smartlist_new();
   cons2 = smartlist_new();
 
   /* Identity hashes are not sorted properly, return NULL.
    * Already tested in gen_ed_diff, but see that a NULL ed diff also makes
    * gen_diff return NULL. */
-  smartlist_add(cons1, (char*)"r name bbbbbbbbbbbbbbbbbbbbbbbbbbb etc");
-  smartlist_add(cons1, (char*)"foo");
-  smartlist_add(cons1, (char*)"r name aaaaaaaaaaaaaaaaaaaaaaaaaaa etc");
-  smartlist_add(cons1, (char*)"bar");
+  cons1_str = tor_strdup(
+      "header\nnetwork-status-version foo\n"
+      "r name bbbbbbbbbbbbbbbbb etc\nfoo\n"
+      "r name aaaaaaaaaaaaaaaaa etc\nbar\n"
+      "directory-signature foo bar\nbar\n"
+      );
+  cons2_str = tor_strdup(
+      "header\nnetwork-status-version foo\n"
+      "r name aaaaaaaaaaaaaaaaa etc\nfoo\n"
+      "r name ccccccccccccccccc etc\nbar\n"
+      "directory-signature foo bar\nbar\n"
+      );
 
-  smartlist_add(cons2, (char*)"r name aaaaaaaaaaaaaaaaaaaaaaaaaaa etc");
-  smartlist_add(cons2, (char*)"foo");
-  smartlist_add(cons2, (char*)"r name ccccccccccccccccccccccccccc etc");
-  smartlist_add(cons2, (char*)"bar");
+  test_eq(0, router_get_networkstatus_v3_hashes(cons1_str, &digests1));
+  test_eq(0, router_get_networkstatus_v3_hashes(cons2_str, &digests2));
 
-  diff = consdiff_gen_diff(cons1, cons2);
+  tor_split_lines(cons1, cons1_str, (int)strlen(cons1_str));
+  tor_split_lines(cons2, cons2_str, (int)strlen(cons2_str));
+
+  diff = consdiff_gen_diff(cons1, cons2, &digests1, &digests2);
   test_eq_ptr(NULL, diff);
 
-  /* Test 'a', 'c' and 'd' together. See that it is done in reverse order.
-   * As tested in gen_ed_diff, but also check the header. */
+  /* Check that the headers are done properly. */
+  tor_free(cons1_str);
+  cons1_str = tor_strdup(
+      "header\nnetwork-status-version foo\n"
+      "r name ccccccccccccccccc etc\nfoo\n"
+      "r name eeeeeeeeeeeeeeeee etc\nbar\n"
+      "directory-signature foo bar\nbar\n"
+      );
+  test_eq(0, router_get_networkstatus_v3_hashes(cons1_str, &digests1));
   smartlist_clear(cons1);
-  smartlist_clear(cons2);
-  smartlist_split_string(cons1, "A:B:C:D:E", ":", 0, 0);
-  smartlist_split_string(cons2, "A:C:O:E:U", ":", 0, 0);
-  diff = consdiff_gen_diff(cons1, cons2);
+  tor_split_lines(cons1, cons1_str, (int)strlen(cons1_str));
+  diff = consdiff_gen_diff(cons1, cons2, &digests1, &digests2);
   test_neq_ptr(NULL, diff);
-  test_eq(9, smartlist_len(diff));
+  test_eq(7, smartlist_len(diff));
   test_streq("network-status-diff-version 1", smartlist_get(diff, 0));
-  /*test_streq("hash foo bar", smartlist_get(diff, 1));*/
-  test_streq("5a", smartlist_get(diff, 2));
-  test_streq("U", smartlist_get(diff, 3));
-  test_streq(".", smartlist_get(diff, 4));
-  test_streq("4c", smartlist_get(diff, 5));
-  test_streq("O", smartlist_get(diff, 6));
-  test_streq(".", smartlist_get(diff, 7));
-  test_streq("2d", smartlist_get(diff, 8));
+  test_streq("hash "
+      "C2199B6827514F39ED9B3F2E2E73735C6C5468FD636240BB454C526220DE702A "
+      "B193E5FBFE5C009AEDE56F9218E6421A1AE5C19F43E091786A73F43F60409B60",
+      smartlist_get(diff, 1));
+  test_streq("4,5d", smartlist_get(diff, 2));
+  test_streq("2a", smartlist_get(diff, 3));
+  test_streq("r name aaaaaaaaaaaaaaaaa etc", smartlist_get(diff, 4));
+  test_streq("foo", smartlist_get(diff, 5));
+  test_streq(".", smartlist_get(diff, 6));
 
   /* TODO: small real use-cases, i.e. consensuses. */
 
  done:
-  if (cons1) SMARTLIST_FOREACH(cons1, char*, line, tor_free(line));
-  if (cons2) SMARTLIST_FOREACH(cons2, char*, line, tor_free(line));
+  tor_free(cons1_str);
+  tor_free(cons2_str);
   smartlist_free(cons1);
   smartlist_free(cons2);
   if (diff) SMARTLIST_FOREACH(diff, char*, line, tor_free(line));
@@ -800,43 +775,50 @@ test_consdiff_gen_diff(void)
 static void
 test_consdiff_apply_diff(void)
 {
-  smartlist_t *cons1, *cons2, *diff;
+  smartlist_t *cons1=NULL, *diff=NULL;
+  char *cons1_str=NULL, *cons2 = NULL;
   cons1 = smartlist_new();
   diff = smartlist_new();
+  digests_t digests1;
+
+  cons1_str = tor_strdup(
+      "header\nnetwork-status-version foo\n"
+      "r name ccccccccccccccccc etc\nfoo\n"
+      "r name eeeeeeeeeeeeeeeee etc\nbar\n"
+      "directory-signature foo bar\nbar\n"
+      );
+  test_eq(0, router_get_networkstatus_v3_hashes(cons1_str, &digests1));
+  tor_split_lines(cons1, cons1_str, (int)strlen(cons1_str));
 
   /* diff doesn't have enough lines. */
-  cons2 = consdiff_apply_diff(cons1, diff);
+  cons2 = consdiff_apply_diff(cons1, diff, &digests1);
   test_eq_ptr(NULL, cons2);
 
   /* first line doesn't match format-version string. */
   smartlist_add(diff, (char*)"foo-bar");
   smartlist_add(diff, (char*)"header-line");
-  smartlist_add(diff, (char*)"0d");
-  cons2 = consdiff_apply_diff(cons1, diff);
+  cons2 = consdiff_apply_diff(cons1, diff, &digests1);
   test_eq_ptr(NULL, cons2);
 
   /* The first word of the second header line is not "hash". */
   smartlist_clear(diff);
   smartlist_add(diff, (char*)"network-status-diff-version 1");
   smartlist_add(diff, (char*)"word a b");
-  smartlist_add(diff, (char*)"0d");
-  cons2 = consdiff_apply_diff(cons1, diff);
+  cons2 = consdiff_apply_diff(cons1, diff, &digests1);
   test_eq_ptr(NULL, cons2);
 
   /* Wrong number of words after "hash". */
   smartlist_clear(diff);
   smartlist_add(diff, (char*)"network-status-diff-version 1");
   smartlist_add(diff, (char*)"hash a b c");
-  smartlist_add(diff, (char*)"0d");
-  cons2 = consdiff_apply_diff(cons1, diff);
+  cons2 = consdiff_apply_diff(cons1, diff, &digests1);
   test_eq_ptr(NULL, cons2);
 
   /* base16 sha256 digests do not have the expected length. */
   smartlist_clear(diff);
   smartlist_add(diff, (char*)"network-status-diff-version 1");
   smartlist_add(diff, (char*)"hash aaa bbb");
-  smartlist_add(diff, (char*)"0d");
-  cons2 = consdiff_apply_diff(cons1, diff);
+  cons2 = consdiff_apply_diff(cons1, diff, &digests1);
   test_eq_ptr(NULL, cons2);
 
   /* base16 sha256 digests contain non-base16 characters. */
@@ -845,18 +827,7 @@ test_consdiff_apply_diff(void)
   smartlist_add(diff, (char*)"hash"
       " ????????????????????????????????????????????????????????????????"
       " ----------------------------------------------------------------");
-  smartlist_add(diff, (char*)"0d");
-  cons2 = consdiff_apply_diff(cons1, diff);
-  test_eq_ptr(NULL, cons2);
-
-  /* The digest of the starting consensus in the diff is not correct. */
-  smartlist_clear(diff);
-  smartlist_add(diff, (char*)"network-status-diff-version 1");
-  smartlist_add(diff, (char*)"hash"
-      " 2222222222222222222222222222222222222222222222222222222222222222"
-      " 3333333333333333333333333333333333333333333333333333333333333333");
-  smartlist_add(diff, (char*)"0d");
-  cons2 = consdiff_apply_diff(cons1, diff);
+  cons2 = consdiff_apply_diff(cons1, diff, &digests1);
   test_eq_ptr(NULL, cons2);
 
   /* Invalid ed diff.
@@ -865,63 +836,82 @@ test_consdiff_apply_diff(void)
   smartlist_clear(diff);
   smartlist_add(diff, (char*)"network-status-diff-version 1");
   smartlist_add(diff, (char*)"hash"
-      /* sha256 of "". */
-      " e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-      /* bogus sha256. */
-      " 3333333333333333333333333333333333333333333333333333333333333333");
+      /* sha256 of cons1. */
+      " C2199B6827514F39ED9B3F2E2E73735C6C5468FD636240BB454C526220DE702A"
+      /* sha256 of cons2. */
+      " 635D34593020C08E5ECD865F9986E29D50028EFA62843766A8197AD228A7F6AA");
   smartlist_add(diff, (char*)"foobar");
-  cons2 = consdiff_apply_diff(cons1, diff);
+  cons2 = consdiff_apply_diff(cons1, diff, &digests1);
+  test_eq_ptr(NULL, cons2);
+
+  /* Base consensus doesn't match its digest as found in the diff. */
+  smartlist_clear(diff);
+  smartlist_add(diff, (char*)"network-status-diff-version 1");
+  smartlist_add(diff, (char*)"hash"
+      /* bogus sha256. */
+      " 3333333333333333333333333333333333333333333333333333333333333333"
+      /* sha256 of cons2. */
+      " 635D34593020C08E5ECD865F9986E29D50028EFA62843766A8197AD228A7F6AA");
+  cons2 = consdiff_apply_diff(cons1, diff, &digests1);
   test_eq_ptr(NULL, cons2);
 
   /* Resulting consensus doesn't match its digest as found in the diff. */
   smartlist_clear(diff);
   smartlist_add(diff, (char*)"network-status-diff-version 1");
   smartlist_add(diff, (char*)"hash"
-      /* sha256 of "". */
-      " e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      /* sha256 of cons1. */
+      " C2199B6827514F39ED9B3F2E2E73735C6C5468FD636240BB454C526220DE702A"
       /* bogus sha256. */
       " 3333333333333333333333333333333333333333333333333333333333333333");
-  smartlist_add(diff, (char*)"0a");
-  smartlist_add(diff, (char*)"foo");
-  smartlist_add(diff, (char*)".");
-  cons2 = consdiff_apply_diff(cons1, diff);
+  cons2 = consdiff_apply_diff(cons1, diff, &digests1);
   test_eq_ptr(NULL, cons2);
 
   /* Very simple test, only to see that nothing errors. */
   smartlist_clear(diff);
   smartlist_add(diff, (char*)"network-status-diff-version 1");
   smartlist_add(diff, (char*)"hash"
-      /* sha256 of "". */
-      " e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-      /* sha256 of "foo\n". */
-      " b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd32812f4850b878ae4944c");
-  smartlist_add(diff, (char*)"0a");
-  smartlist_add(diff, (char*)"foo");
+      /* sha256 of cons1. */
+      " C2199B6827514F39ED9B3F2E2E73735C6C5468FD636240BB454C526220DE702A"
+      /* sha256 of cons2. */
+      " 635D34593020C08E5ECD865F9986E29D50028EFA62843766A8197AD228A7F6AA");
+  smartlist_add(diff, (char*)"4c");
+  smartlist_add(diff, (char*)"sample");
   smartlist_add(diff, (char*)".");
-  cons2 = consdiff_apply_diff(cons1, diff);
+  cons2 = consdiff_apply_diff(cons1, diff, &digests1);
   test_neq_ptr(NULL, cons2);
-  SMARTLIST_FOREACH(cons2, char *, cp, tor_free(cp));
-  smartlist_free(cons2);
+  test_streq(
+      "header\nnetwork-status-version foo\n"
+      "r name ccccccccccccccccc etc\nsample\n"
+      "r name eeeeeeeeeeeeeeeee etc\nbar\n"
+      "directory-signature foo bar\nbar\n",
+      cons2);
+  tor_free(cons2);
 
-  /* Check that capital letters in base16-encoded digests work too. */
+  /* Check that lowercase letters in base16-encoded digests work too. */
   smartlist_clear(diff);
   smartlist_add(diff, (char*)"network-status-diff-version 1");
   smartlist_add(diff, (char*)"hash"
-      /* sha256 of "". */
-      " E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
-      /* sha256 of "foo\n". */
-      " B5BB9D8014A0F9B1D61E21E796D78DCCDF1352F23CD32812F4850B878AE4944C");
-  smartlist_add(diff, (char*)"0a");
-  smartlist_add(diff, (char*)"foo");
+      /* sha256 of cons1. */
+      " c2199b6827514f39ed9b3f2e2e73735c6c5468fd636240bb454c526220de702a"
+      /* sha256 of cons2. */
+      " 635d34593020c08e5ecd865f9986e29d50028efa62843766a8197ad228a7f6aa");
+  smartlist_add(diff, (char*)"4c");
+  smartlist_add(diff, (char*)"sample");
   smartlist_add(diff, (char*)".");
-  cons2 = consdiff_apply_diff(cons1, diff);
+  cons2 = consdiff_apply_diff(cons1, diff, &digests1);
   test_neq_ptr(NULL, cons2);
-  SMARTLIST_FOREACH(cons2, char *, cp, tor_free(cp));
-  smartlist_free(cons2);
+  test_streq(
+      "header\nnetwork-status-version foo\n"
+      "r name ccccccccccccccccc etc\nsample\n"
+      "r name eeeeeeeeeeeeeeeee etc\nbar\n"
+      "directory-signature foo bar\nbar\n",
+      cons2);
+  tor_free(cons2);
 
   smartlist_clear(diff);
 
  done:
+  tor_free(cons1_str);
   smartlist_free(cons1);
   smartlist_free(diff);
 }
@@ -942,7 +932,6 @@ struct testcase_t consdiff_tests[] = {
   CONSDIFF_LEGACY(base64cmp),
   CONSDIFF_LEGACY(gen_ed_diff),
   CONSDIFF_LEGACY(apply_ed_diff),
-  CONSDIFF_LEGACY(crypto_digest_smartlist_ends),
   CONSDIFF_LEGACY(gen_diff),
   CONSDIFF_LEGACY(apply_diff),
   END_OF_TESTCASES
