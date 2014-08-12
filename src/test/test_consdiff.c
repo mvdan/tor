@@ -788,7 +788,6 @@ test_consdiff_apply_diff(void)
       "directory-signature foo bar\nbar\n"
       );
   test_eq(0, router_get_networkstatus_v3_hashes(cons1_str, &digests1));
-  fprintf(stderr, "%s\n", hex_str(digests1.d[DIGEST_SHA256], DIGEST256_LEN));
   tor_split_lines(cons1, cons1_str, (int)strlen(cons1_str));
 
   /* diff doesn't have enough lines. */
