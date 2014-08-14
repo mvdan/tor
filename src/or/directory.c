@@ -2747,12 +2747,18 @@ directory_handle_command_get(dir_connection_t *conn, const char *headers,
     {
       const char* digest;
       dir_spool_src = DIR_SPOOL_NETWORKSTATUS;
-      digest = http_get_header(headers, "X-Or-Diff-From_consensus: ");
+      digest = http_get_header(headers, "X-Or-Diff-From-Consensus: ");
       if (digest) {
         cached_dir_t *d;
+        log_info(LD_DIRSERV, "Client asked for a consensus diff from the "
+                             "consensus known by digest %s", digest);
         if ((d=dirserv_lookup_cached_cons_diff_by_digest(digest))) {
           dir_spool_src = DIR_SPOOL_CONS_DIFF;
           dlen = d->dir_z_len;
+        } else {
+          /* dlen will be estimated later. */
+          log_info(LD_DIRSERV, "We don't have such a consensus diff, falling "
+                               "back to serving the full consensus.");
         }
       }
       if (dir_spool_src == DIR_SPOOL_NETWORKSTATUS) {
