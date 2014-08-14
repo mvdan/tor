@@ -98,10 +98,6 @@ typedef struct authdir_config_t {
 /** Should be static; exposed for testing. */
 static authdir_config_t *fingerprint_list = NULL;
 
-/** Maps HEX_SHA256 digests of old cached consensuses to their
- * encapsulated info. */
-static strmap_t *old_cached_consensus_by_digest = NULL;
-
 /** Allocate and return a new, empty, authdir_config_t. */
 static authdir_config_t *
 authdir_config_new(void)
@@ -1108,6 +1104,11 @@ directory_too_idle_to_fetch_descriptors(const or_options_t *options,
  * currently serving. */
 static strmap_t *cached_consensuses = NULL;
 
+/** Maps from HEX_SHA256 base consensus digests (char *) to the encapsulated
+ * info of their consensus diff that we are currently serving
+ * (old_cached_consensus_t *). */
+static strmap_t *old_cached_consensus_by_digest = NULL;
+
 /** Decrement the reference count on <b>d</b>, and free it if it no longer has
  * any references. */
 void
@@ -1136,6 +1137,21 @@ new_cached_dir(char *s, time_t published)
   return d;
 }
 
+/** Allocate and return a new cached_dir_t containing the compressed string
+ * <b>s</b> of len <b>s_len</b>, published at <b>published</b>. */
+static cached_dir_t *
+new_cached_dir_comp(char *s, size_t s_len, time_t published)
+{
+  cached_dir_t *d = tor_malloc_zero(sizeof(cached_dir_t));
+  d->refcnt = 1;
+  d->dir = s;
+  d->dir_len = s_len;
+  d->dir_z = s;
+  d->dir_z_len = s_len;
+  d->published = published;
+  return d;
+}
+
 /** Remove all storage held in <b>d</b>, but do not free <b>d</b> itself. */
 static void
 clear_cached_dir(cached_dir_t *d)
@@ -1155,6 +1171,25 @@ free_cached_dir_(void *_d)
 
   d = (cached_dir_t *)_d;
   cached_dir_decref(d);
+}
+
+/** Free all storage held by the old_cached_consensus_t in <b>c</b>. */
+static void
+free_old_cached_consensus_(void *_c)
+{
+  old_cached_consensus_t *c;
+  cached_dir_t *d;
+  if (!_c)
+    return;
+
+  c = (old_cached_consensus_t *)_c;
+  d = c->cached_dir;
+
+  if (c->cached_dir && --c->cached_dir->refcnt == 0) {
+    tor_munmap_file(c->diff_mmap);
+    tor_free(c->cached_dir);
+  }
+  tor_free(c);
 }
 
 /** Replace the v3 consensus networkstatus of type <b>flavor_name</b> that
@@ -1234,6 +1269,13 @@ dirserv_refresh_stored_consensuses()
         digest = smartlist_get(parts, 1);
         consensus_diff_fname = get_datadir_fname2(flavdir_diff, name);
         c->diff_mmap = tor_mmap_file(consensus_diff_fname);
+        if (c->diff_mmap) {
+          c->cached_dir = new_cached_dir_comp((char*)c->diff_mmap->data,
+                                              c->diff_mmap->size,
+                                              0);
+        } else {
+          c->cached_dir = NULL;
+        }
         tor_free(consensus_diff_fname);
         strmap_set(old_cached_consensus_by_digest, digest, c);
       }
@@ -1252,14 +1294,14 @@ int
 dirserv_store_consensus(const char *consensus, const char *flavor,
                         const char *digest, time_t valid_after)
 {
-  char *consensus_fname, flavdir[64], name[64];
+  char *consensus_fname, flavdir[64], name[128];
   char *consensus_compressed;
   size_t comp_len;
   int r;
   tor_snprintf(flavdir, sizeof(flavdir),
                OLD_CACHED_CONS_DIRNAME"-%s", flavor);
   if (check_or_create_data_subdir(flavdir) != 0) return -1;
-  tor_snprintf(name, 64, "%li-%s", valid_after, digest);
+  tor_snprintf(name, 128, "%li-%s", valid_after, digest);
   if (tor_gzip_compress(&consensus_compressed, &comp_len,
                         consensus, strlen(consensus),
                         ZLIB_METHOD)<0) return -1;
@@ -1274,6 +1316,7 @@ dirserv_store_consensus(const char *consensus, const char *flavor,
   c->flavor = networkstatus_parse_flavor_name(flavor);
   c->valid_after = valid_after;
   c->diff_mmap = NULL;
+  c->cached_dir = NULL;
   strmap_set(old_cached_consensus_by_digest, digest, c);
 
   return 0;
@@ -1296,14 +1339,14 @@ dirserv_remove_old_consensuses()
                         old_cached_consensus_t *, c) {
 
     if (c->valid_after + KEEP_OLD_CONSENSUSES_INTERVAL < now) {
-      char name[64], *consensus_fname, *diff_fname;
+      char name[128], *consensus_fname, *diff_fname;
       char flavdir[64], flavdir_diff[64];
       const char *flavname = networkstatus_get_flavor_name(c->flavor);
       tor_snprintf(flavdir, sizeof(flavdir),
                    OLD_CACHED_CONS_DIRNAME"-%s", flavname);
       tor_snprintf(flavdir_diff, sizeof(flavdir_diff),
                    OLD_CACHED_CONS_DIFFS_DIRNAME"-%s", flavname);
-      tor_snprintf(name, 64, "%li-%s", c->valid_after, digest);
+      tor_snprintf(name, 128, "%li-%s", c->valid_after, digest);
       consensus_fname = get_datadir_fname2(flavdir, name);
       diff_fname = get_datadir_fname2(flavdir_diff, name);
       if (unlink(consensus_fname)<0) {
@@ -1316,6 +1359,7 @@ dirserv_remove_old_consensuses()
       }
       tor_free(consensus_fname);
       tor_free(diff_fname);
+      tor_free(c->cached_dir);
       tor_free(c);
       MAP_DEL_CURRENT(digest);
     }
@@ -1331,6 +1375,7 @@ dirserv_remove_old_consensuses()
  * be removed first. */
 int
 dirserv_update_consensus_diffs(const char *cur_consensus,
+                               time_t published,
                                const char *flavname)
 {
   char flavdir[64], flavdir_diff[64];
@@ -1361,7 +1406,7 @@ dirserv_update_consensus_diffs(const char *cur_consensus,
   STRMAP_FOREACH(old_cached_consensus_by_digest, digest,
                  old_cached_consensus_t *, c) {
 
-    char name[64], *consensus_fname, *consensus_diff_fname;
+    char name[128], *consensus_fname, *consensus_diff_fname;
     char *stored_consensus_comp, *stored_consensus;
     char *diff, *diff_comp;
     smartlist_t *stored_consensus_sl, *diff_sl;
@@ -1373,7 +1418,7 @@ dirserv_update_consensus_diffs(const char *cur_consensus,
     if (c->flavor != flavor) continue;
     r = -1;
 
-    tor_snprintf(name, 64, "%li-%s", c->valid_after, digest);
+    tor_snprintf(name, 128, "%li-%s", c->valid_after, digest);
     consensus_fname = get_datadir_fname2(flavdir, name);
     stored_consensus_comp = read_file_to_str(consensus_fname,
                                              RFTS_BIN, &comp_stat);
@@ -1415,6 +1460,10 @@ dirserv_update_consensus_diffs(const char *cur_consensus,
                             diff_comp_len, 1);
     tor_munmap_file(c->diff_mmap);
     c->diff_mmap = tor_mmap_file(consensus_diff_fname);
+    tor_free(c->cached_dir);
+    c->cached_dir = new_cached_dir_comp((char*)c->diff_mmap->data,
+                                        c->diff_mmap->size,
+                                        published);
     tor_free(consensus_diff_fname);
     tor_free(diff_comp);
     if (r<0) break;
@@ -3119,6 +3168,19 @@ lookup_cached_dir_by_fp(const char *fp)
   return d;
 }
 
+/** Given a base16 sha256 digest <b>digest</b>, return a pointer to the cached
+ * dir object holding the consensus diff that transforms the consensus known
+ * by said digest to the current consensus, or NULL if we have no such
+ * consensus diff. */
+cached_dir_t *
+dirserv_lookup_cached_consdiff_by_hexdigest256(const char *digest)
+{
+  old_cached_consensus_t *c;
+  c = strmap_get(old_cached_consensus_by_digest, digest);
+  if (!c) return NULL;
+  return c->cached_dir;
+}
+
 /** Remove from <b>fps</b> every networkstatus key where both
  * a) we have a networkstatus document and
  * b) it is not newer than <b>cutoff</b>.
@@ -3480,6 +3542,44 @@ connection_dirserv_add_networkstatus_bytes_to_outbuf(dir_connection_t *conn)
   return 0;
 }
 
+/** Spooling helper: Called when we're spooling compressed consensus diffs on
+ * <b>conn</b>, and the outbuf has become too empty.  If the current
+ * compressed consensus diff (in <b>conn</b>-\>cached_dir) has more data, pull
+ * data from there.  Returns 0 on success, negative on failure. */
+static int
+connection_dirserv_add_cons_diff_bytes_to_outbuf(dir_connection_t *conn)
+{
+
+  while (connection_get_outbuf_len(TO_CONN(conn)) < DIRSERV_BUFFER_MIN) {
+    if (conn->cached_dir) {
+      int r = connection_dirserv_add_dir_bytes_to_outbuf(conn);
+      if (conn->dir_spool_src == DIR_SPOOL_NONE) {
+        /* add_dir_bytes thinks we're done with the cached_dir.  But we
+         * may have more cached_dirs! */
+        conn->dir_spool_src = DIR_SPOOL_CONS_DIFF;
+      }
+      if (r) return r;
+    } else if (conn->fingerprint_stack &&
+               smartlist_len(conn->fingerprint_stack)) {
+      /* Add another networkstatus; start serving it. */
+      char *digest = smartlist_pop_last(conn->fingerprint_stack);
+      cached_dir_t *d = dirserv_lookup_cached_consdiff_by_hexdigest256(digest);
+      tor_free(digest);
+      if (d) {
+        ++d->refcnt;
+        conn->cached_dir = d;
+        conn->cached_dir_offset = 0;
+      }
+    } else {
+      connection_dirserv_finish_spooling(conn);
+      smartlist_free(conn->fingerprint_stack);
+      conn->fingerprint_stack = NULL;
+      return 0;
+    }
+  }
+  return 0;
+}
+
 /** Called whenever we have flushed some directory data in state
  * SERVER_WRITING. */
 int
@@ -3502,6 +3602,8 @@ connection_dirserv_flushed_some(dir_connection_t *conn)
       return connection_dirserv_add_dir_bytes_to_outbuf(conn);
     case DIR_SPOOL_NETWORKSTATUS:
       return connection_dirserv_add_networkstatus_bytes_to_outbuf(conn);
+    case DIR_SPOOL_CONS_DIFF:
+      return connection_dirserv_add_cons_diff_bytes_to_outbuf(conn);
     case DIR_SPOOL_NONE:
     default:
       return 0;
@@ -3592,6 +3694,7 @@ dirserv_free_all(void)
   dirserv_free_fingerprint_list();
 
   strmap_free(cached_consensuses, free_cached_dir_);
+  strmap_free(old_cached_consensus_by_digest, free_old_cached_consensus_);
   cached_consensuses = NULL;
 
   dirserv_clear_measured_bw_cache();

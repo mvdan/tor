@@ -38,6 +38,7 @@ typedef struct old_cached_consensus_t {
   time_t valid_after;
   tor_mmap_t *diff_mmap;
   consensus_flavor_t flavor;
+  cached_dir_t *cached_dir;
 } old_cached_consensus_t;
 
 int connection_dirserv_flushed_some(dir_connection_t *conn);
@@ -75,6 +76,7 @@ void dirserv_refresh_stored_consensuses(void);
 int dirserv_store_consensus(const char *consensus, const char *flavor,
                             const char *digest, time_t valid_after);
 int dirserv_update_consensus_diffs(const char *cur_consensus,
+                                   time_t published,
                                    const char *flavor);
 void dirserv_set_cached_consensus_networkstatus(const char *consensus,
                                                 const char *flavor_name,
@@ -103,6 +105,8 @@ void dirserv_set_node_flags_from_authoritative_status(node_t *node,
                                                       uint32_t authstatus);
 
 int dirserv_would_reject_router(const routerstatus_t *rs);
+cached_dir_t *dirserv_lookup_cached_consdiff_by_hexdigest256(
+                                                           const char *digest);
 int dirserv_remove_old_statuses(smartlist_t *fps, time_t cutoff);
 int dirserv_have_any_serverdesc(smartlist_t *fps, int spool_src);
 int dirserv_have_any_microdesc(const smartlist_t *fps);

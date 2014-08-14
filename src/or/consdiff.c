@@ -832,9 +832,9 @@ consdiff_get_digests(smartlist_t *diff,
   }
 
   if (digest1_hex)
-    strncpy(digest1_hex, cons1_hash_hex, HEX_DIGEST256_LEN+1);
+    strlcpy(digest1_hex, cons1_hash_hex, HEX_DIGEST256_LEN+1);
   if (digest2_hex)
-    strncpy(digest2_hex, cons2_hash_hex, HEX_DIGEST256_LEN+1);
+    strlcpy(digest2_hex, cons2_hash_hex, HEX_DIGEST256_LEN+1);
 
   if (base16_decode(cons1_hash, DIGEST256_LEN,
           cons1_hash_hex, HEX_DIGEST256_LEN) != 0 ||
@@ -846,9 +846,9 @@ consdiff_get_digests(smartlist_t *diff,
   }
 
   if (digest1)
-    strncpy(digest1, cons1_hash, DIGEST256_LEN);
+    memcpy(digest1, cons1_hash, DIGEST256_LEN);
   if (digest2)
-    strncpy(digest2, cons2_hash, DIGEST256_LEN);
+    memcpy(digest2, cons2_hash, DIGEST256_LEN);
 
   SMARTLIST_FOREACH(hash_words, char *, cp, tor_free(cp));
   smartlist_free(hash_words);
@@ -884,10 +884,18 @@ consdiff_apply_diff(smartlist_t *cons1, smartlist_t *diff,
 
   /* See that the consensus that was given to us matches its hash. */
   if (memcmp(digests1->d[DIGEST_SHA256], e_cons1_hash,
-             DIGEST256_LEN*sizeof(char)) != 0) {
+             DIGEST256_LEN) != 0) {
     log_warn(LD_CONSDIFF, "Refusing to apply consensus diff because "
         "the base consensus doesn't match its own digest as found in "
         "the consensus diff header.");
+    char hex_digest1[HEX_DIGEST256_LEN+1];
+    char e_hex_digest1[HEX_DIGEST256_LEN+1];
+    base16_encode(hex_digest1, HEX_DIGEST256_LEN+1,
+        digests1->d[DIGEST_SHA256], DIGEST256_LEN);
+    base16_encode(e_hex_digest1, HEX_DIGEST256_LEN+1,
+        e_cons1_hash, DIGEST256_LEN);
+    log_warn(LD_CONSDIFF, "Expected: %s Found: %s\n",
+             hex_digest1, e_hex_digest1);
     goto error_cleanup;
   }
 
@@ -917,10 +925,18 @@ consdiff_apply_diff(smartlist_t *cons1, smartlist_t *diff,
 
   /* See that the resulting consensus matches its hash. */
   if (memcmp(cons2_digests.d[DIGEST_SHA256], e_cons2_hash,
-             DIGEST256_LEN*sizeof(char)) != 0) {
+             DIGEST256_LEN) != 0) {
     log_warn(LD_CONSDIFF, "Refusing to apply consensus diff because "
         "the resulting consensus doesn't match its own digest as found in "
         "the consensus diff header.");
+    char hex_digest2[HEX_DIGEST256_LEN+1];
+    char e_hex_digest2[HEX_DIGEST256_LEN+1];
+    base16_encode(hex_digest2, HEX_DIGEST256_LEN+1,
+        cons2_digests.d[DIGEST_SHA256], DIGEST256_LEN);
+    base16_encode(e_hex_digest2, HEX_DIGEST256_LEN+1,
+        e_cons2_hash, DIGEST256_LEN);
+    log_warn(LD_CONSDIFF, "Expected: %s Found: %s\n",
+             hex_digest2, e_hex_digest2);
     goto error_cleanup;
   }
 
