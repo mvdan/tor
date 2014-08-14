@@ -1447,14 +1447,14 @@ int
 dirserv_store_consensus(const char *consensus, const char *flavor,
                         const char *digest, time_t valid_after)
 {
-  char *consensus_fname, flavdir[64], name[64];
+  char *consensus_fname, flavdir[64], name[128];
   char *consensus_compressed;
   size_t comp_len;
   int r;
   tor_snprintf(flavdir, sizeof(flavdir),
                OLD_CACHED_CONS_DIRNAME"-%s", flavor);
   if (check_or_create_data_subdir(flavdir) != 0) return -1;
-  tor_snprintf(name, 64, "%li-%s", valid_after, digest);
+  tor_snprintf(name, 128, "%li-%s", valid_after, digest);
   if (tor_gzip_compress(&consensus_compressed, &comp_len,
                         consensus, strlen(consensus),
                         ZLIB_METHOD)<0) return -1;
@@ -1492,14 +1492,14 @@ dirserv_remove_old_consensuses()
                         old_cached_consensus_t *, c) {
 
     if (c->valid_after + KEEP_OLD_CONSENSUSES_INTERVAL < now) {
-      char name[64], *consensus_fname, *diff_fname;
+      char name[128], *consensus_fname, *diff_fname;
       char flavdir[64], flavdir_diff[64];
       const char *flavname = networkstatus_get_flavor_name(c->flavor);
       tor_snprintf(flavdir, sizeof(flavdir),
                    OLD_CACHED_CONS_DIRNAME"-%s", flavname);
       tor_snprintf(flavdir_diff, sizeof(flavdir_diff),
                    OLD_CACHED_CONS_DIFFS_DIRNAME"-%s", flavname);
-      tor_snprintf(name, 64, "%li-%s", c->valid_after, digest);
+      tor_snprintf(name, 128, "%li-%s", c->valid_after, digest);
       consensus_fname = get_datadir_fname2(flavdir, name);
       diff_fname = get_datadir_fname2(flavdir_diff, name);
       if (unlink(consensus_fname)<0) {
@@ -1559,7 +1559,7 @@ dirserv_update_consensus_diffs(const char *cur_consensus,
   STRMAP_FOREACH(old_cached_consensus_by_digest, digest,
                  old_cached_consensus_t *, c) {
 
-    char name[64], *consensus_fname, *consensus_diff_fname;
+    char name[128], *consensus_fname, *consensus_diff_fname;
     char *stored_consensus_comp, *stored_consensus;
     char *diff, *diff_comp;
     smartlist_t *stored_consensus_sl, *diff_sl;
@@ -1571,7 +1571,7 @@ dirserv_update_consensus_diffs(const char *cur_consensus,
     if (c->flavor != flavor) continue;
     r = -1;
 
-    tor_snprintf(name, 64, "%li-%s", c->valid_after, digest);
+    tor_snprintf(name, 128, "%li-%s", c->valid_after, digest);
     consensus_fname = get_datadir_fname2(flavdir, name);
     stored_consensus_comp = read_file_to_str(consensus_fname,
                                              RFTS_BIN, &comp_stat);
