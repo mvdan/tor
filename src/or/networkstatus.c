@@ -1423,7 +1423,8 @@ networkstatus_set_current_consensus(const char *consensus,
                     current_md_consensus->digests.d[DIGEST_SHA256],
                     DIGEST256_LEN);
     }
-    if (dirserv_update_consensus_diffs(consensus, flavor)<0) {
+    dirserv_remove_old_consensuses();
+    if (dirserv_update_consensus_diffs(consensus, c->valid_after, flavor)<0) {
       log_warn(LD_DIR, "Failed to update the stored consensus diffs.");
       goto done;
     }

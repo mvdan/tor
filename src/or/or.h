@@ -1685,7 +1685,7 @@ typedef enum {
     DIR_SPOOL_NONE=0, DIR_SPOOL_SERVER_BY_DIGEST, DIR_SPOOL_SERVER_BY_FP,
     DIR_SPOOL_EXTRA_BY_DIGEST, DIR_SPOOL_EXTRA_BY_FP,
     DIR_SPOOL_CACHED_DIR, DIR_SPOOL_NETWORKSTATUS,
-    DIR_SPOOL_MICRODESC, /* NOTE: if we add another entry, add another bit. */
+    DIR_SPOOL_MICRODESC, DIR_SPOOL_CONS_DIFF,
 } dir_spool_source_t;
 #define dir_spool_source_bitfield_t ENUM_BF(dir_spool_source_t)
 
@@ -1707,13 +1707,15 @@ typedef struct dir_connection_t {
    * "spooling" of directory material to the outbuf.  Otherwise, we'd have
    * to append everything to the outbuf in one enormous chunk. */
   /** What exactly are we spooling right now? */
-  dir_spool_source_bitfield_t  dir_spool_src : 3;
+  dir_spool_source_bitfield_t  dir_spool_src : 4;
 
   /** If we're fetching descriptors, what router purpose shall we assign
    * to them? */
   uint8_t router_purpose;
   /** List of fingerprints for networkstatuses or descriptors to be spooled. */
   smartlist_t *fingerprint_stack;
+  /** If we're fetching a consensus diff, what digest identifies the diff? */
+  //char cons_diff_digest[DIGEST256_LEN];
   /** A cached_dir_t object that we're currently spooling out */
   struct cached_dir_t *cached_dir;
   /** The current offset into cached_dir. */

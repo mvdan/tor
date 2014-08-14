@@ -1964,14 +1964,24 @@ do_main_loop(void)
     log_warn(LD_DIR,
              "Couldn't load all cached v3 certificates. Starting anyway.");
   }
+  if (router_reload_consensus_networkstatus()) {
+    return -1;
+  }
   const or_options_t *options = get_options();
   /* See what consensuses have we cached on disk. */
   if (directory_caches_dir_info(options)) {
-    dirserv_refresh_stored_consensuses();
+    networkstatus_t *c;
+    time_t published[N_CONSENSUS_FLAVORS];
+    int i;
+    for (i=0; i<N_CONSENSUS_FLAVORS; ++i) {
+      c = networkstatus_get_latest_consensus_by_flavor(i);
+      if (c)
+        published[i] = c->valid_after;
+      else
+        published[i] = 0;
+    }
+    dirserv_refresh_stored_consensuses(published);
     dirserv_remove_old_consensuses();
-  }
-  if (router_reload_consensus_networkstatus()) {
-    return -1;
   }
   /* load the routers file, or assign the defaults. */
   if (router_reload_router_list()) {

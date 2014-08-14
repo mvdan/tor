@@ -2671,6 +2671,7 @@ directory_handle_command_get(dir_connection_t *conn, const char *headers,
     smartlist_t *dir_fps = smartlist_new();
     const char *request_type = NULL;
     long lifetime = NETWORKSTATUS_CACHE_LIFETIME;
+    dir_spool_source_t dir_spool_src;
 
     if (1) {
       networkstatus_t *v;
@@ -2743,7 +2744,27 @@ directory_handle_command_get(dir_connection_t *conn, const char *headers,
       goto done;
     }
 
-    dlen = dirserv_estimate_data_size(dir_fps, 0, compressed);
+    {
+      const char* digest;
+      dir_spool_src = DIR_SPOOL_NETWORKSTATUS;
+      digest = http_get_header(headers, "X-Or-Diff-From_consensus: ");
+      if (digest) {
+        cached_dir_t *d;
+        if ((d=dirserv_lookup_cached_cons_diff_by_digest(digest))) {
+          dir_spool_src = DIR_SPOOL_CONS_DIFF;
+          dlen = d->dir_z_len;
+        }
+      }
+      if (dir_spool_src == DIR_SPOOL_NETWORKSTATUS) {
+        dlen = dirserv_estimate_data_size(dir_fps, 0, compressed);
+      } else {
+        char *digest_dup = tor_malloc_zero(HEX_DIGEST256_LEN);
+        strlcpy(digest_dup, digest, HEX_DIGEST256_LEN);
+        smartlist_add(dir_fps, digest_dup);
+        compressed = 1; /* We always compress consensus diffs. */
+        request_type = "consdiff.z";
+      }
+    }
     if (global_write_bucket_low(TO_CONN(conn), dlen, 2)) {
       log_debug(LD_DIRSERV,
                "Client asked for network status lists, but we've been "
@@ -2784,7 +2805,7 @@ directory_handle_command_get(dir_connection_t *conn, const char *headers,
       conn->zlib_state = tor_zlib_new(0, ZLIB_METHOD);
 
     /* Prime the connection with some data. */
-    conn->dir_spool_src = DIR_SPOOL_NETWORKSTATUS;
+    conn->dir_spool_src = dir_spool_src;
     connection_dirserv_flushed_some(conn);
     goto done;
   }
