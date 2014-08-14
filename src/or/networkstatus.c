@@ -1434,14 +1434,20 @@ networkstatus_set_current_consensus(const char *consensus,
   }
 
   if (!from_cache) {
-    tor_mmap_t *consensus_mmap;
     write_str_to_file(consensus_fname, consensus, 0);
-    consensus_mmap = networkstatus_get_latest_consensus_mmap_by_flavor(flav);
-    if (tor_munmap_file(consensus_mmap)) {
+  }
+  if (flav == FLAV_NS) {
+    if (tor_munmap_file(current_ns_consensus_mmap)) {
       log_warn(LD_FS, "Failed to munmap the cached consensus file. "
           "Probably about to leak memory.");
     }
-    consensus_mmap = tor_mmap_file(consensus_fname);
+    current_ns_consensus_mmap = tor_mmap_file(consensus_fname);
+  } else {
+    if (tor_munmap_file(current_md_consensus_mmap)) {
+      log_warn(LD_FS, "Failed to munmap the cached consensus file. "
+          "Probably about to leak memory.");
+    }
+    current_md_consensus_mmap = tor_mmap_file(consensus_fname);
   }
 
 /** If a consensus appears more than this many seconds before its declared
