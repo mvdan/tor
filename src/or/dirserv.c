@@ -3394,12 +3394,6 @@ cached_dir_t *
 dirserv_lookup_cached_cons_diff_by_digest(const char *digest)
 {
   old_cached_consensus_t *c;
-  log_info(LD_DIRSERV, "Looking for cached consensus diff %s\n", digest);
-  log_info(LD_DIRSERV, "We have these:\n");
-  STRMAP_FOREACH(old_cached_consensus_by_digest, digest,
-                 old_cached_consensus_t *, c) {
-    log_info(LD_DIRSERV, "\t%s (cached_dir=%p)", digest, c->cached_dir);
-  } STRMAP_FOREACH_END;
   c = strmap_get(old_cached_consensus_by_digest, digest);
   if (!c) return NULL;
   return c->cached_dir;
