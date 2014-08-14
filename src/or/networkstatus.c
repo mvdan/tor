@@ -1432,42 +1432,41 @@ networkstatus_set_current_consensus(const char *consensus,
                                                flavor,
                                                &c->digests,
                                                c->valid_after);
-    char digest_hex[HEX_DIGEST256_LEN+1];
-    if (!strcmp(flavor, "ns")) {
-      base16_encode(digest_hex, HEX_DIGEST256_LEN+1,
-                    current_ns_consensus->digests.d[DIGEST_SHA256],
-                    DIGEST256_LEN);
-    } else if (!strcmp(flavor, "microdesc")) {
-      base16_encode(digest_hex, HEX_DIGEST256_LEN+1,
-                    current_md_consensus->digests.d[DIGEST_SHA256],
-                    DIGEST256_LEN);
+    if (!from_cache) {
+      dirserv_remove_old_consensuses();
     }
-    if (dirserv_update_consensus_diffs(consensus, flavor)<0) {
+    fprintf(stderr, "updating consensus diffs for %s\n", flavor);
+    if (dirserv_update_consensus_diffs(consensus, c->valid_after, flavor)<0) {
       log_warn(LD_DIR, "Failed to update the stored consensus diffs.");
       goto done;
     }
-    if (dirserv_store_consensus(consensus, flavor, digest_hex,
-                                c->valid_after)<0) {
-      log_warn(LD_DIR, "Unable to store fetched consensus "
-               "for future diff purposes.");
+    if (!from_cache) {
+      char digest_hex[HEX_DIGEST256_LEN+1];
+      base16_encode(digest_hex, HEX_DIGEST256_LEN+1,
+                    c->digests.d[DIGEST_SHA256], DIGEST256_LEN);
+      if (dirserv_store_consensus(consensus, flavor, digest_hex,
+                                  c->valid_after)<0) {
+        log_warn(LD_DIR, "Unable to store fetched consensus "
+                 "for future diff purposes.");
+      }
     }
   }
 
   if (!from_cache) {
     write_str_to_file(consensus_fname, consensus, 0);
-    if (!strcmp(flavor, "ns")) {
-      if (tor_munmap_file(current_ns_consensus_mmap)) {
-        log_warn(LD_FS, "Failed to munmap the cached consensus file. "
-            "Probably about to leak memory.");
-      }
-      current_ns_consensus_mmap = tor_mmap_file(consensus_fname);
-    } else if (!strcmp(flavor, "microdesc")) {
-      if (tor_munmap_file(current_md_consensus_mmap)) {
-        log_warn(LD_FS, "Failed to munmap the cached consensus file. "
-            "Probably about to leak memory.");
-      }
-      current_md_consensus_mmap = tor_mmap_file(consensus_fname);
+  }
+  if (flav == FLAV_NS) {
+    if (tor_munmap_file(current_ns_consensus_mmap)) {
+      log_warn(LD_FS, "Failed to munmap the cached consensus file. "
+          "Probably about to leak memory.");
     }
+    current_ns_consensus_mmap = tor_mmap_file(consensus_fname);
+  } else {
+    if (tor_munmap_file(current_md_consensus_mmap)) {
+      log_warn(LD_FS, "Failed to munmap the cached consensus file. "
+          "Probably about to leak memory.");
+    }
+    current_md_consensus_mmap = tor_mmap_file(consensus_fname);
   }
 
 /** If a consensus appears more than this many seconds before its declared
