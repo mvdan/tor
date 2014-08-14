@@ -73,7 +73,7 @@ int directory_too_idle_to_fetch_descriptors(const or_options_t *options,
 
 cached_dir_t *dirserv_get_consensus(const char *flavor_name);
 void dirserv_remove_old_consensuses(void);
-void dirserv_refresh_stored_consensuses(time_t published[N_CONSENSUS_FLAVORS]);
+void dirserv_refresh_stored_consensuses(void);
 int dirserv_store_consensus(const char *consensus, const char *flavor,
                             const char *digest, time_t valid_after);
 int dirserv_update_consensus_diffs(const char *cur_consensus,

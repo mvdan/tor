@@ -1331,14 +1331,20 @@ static void
 free_old_cached_consensus_(void *_c)
 {
   old_cached_consensus_t *c;
+  cached_dir_t *d;
   if (!_c)
     return;
 
   c = (old_cached_consensus_t *)_c;
-  free_cached_dir_(c->cached_dir);
-  tor_munmap_file(c->diff_mmap);
+  d = c->cached_dir;
+
+  if (c->cached_dir && --c->cached_dir->refcnt == 0) {
+    tor_munmap_file(c->diff_mmap);
+    tor_free(c->cached_dir);
+  }
   tor_free(c);
 }
+
 /** Replace the v3 consensus networkstatus of type <b>flavor_name</b> that
  * we're serving with <b>networkstatus</b>, published at <b>published</b>.  No
  * validation is performed. */
@@ -1377,7 +1383,7 @@ dirserv_get_consensus(const char *flavor_name)
 /** Reads what old consensuses and diffs have we got cached on disk and
  * updates old_cached_consensus_by_digest accordingly. */
 void
-dirserv_refresh_stored_consensuses(time_t published[N_CONSENSUS_FLAVORS])
+dirserv_refresh_stored_consensuses()
 {
   int i;
   if (old_cached_consensus_by_digest) {
@@ -1416,9 +1422,13 @@ dirserv_refresh_stored_consensuses(time_t published[N_CONSENSUS_FLAVORS])
         digest = smartlist_get(parts, 1);
         consensus_diff_fname = get_datadir_fname2(flavdir_diff, name);
         c->diff_mmap = tor_mmap_file(consensus_diff_fname);
-        c->cached_dir = new_cached_dir_comp((char*)c->diff_mmap->data,
-                                            c->diff_mmap->size,
-                                            published[i]);
+        if (c->diff_mmap) {
+          c->cached_dir = new_cached_dir_comp((char*)c->diff_mmap->data,
+                                              c->diff_mmap->size,
+                                              0);
+        } else {
+          c->cached_dir = NULL;
+        }
         tor_free(consensus_diff_fname);
         strmap_set(old_cached_consensus_by_digest, digest, c);
       }
@@ -3384,6 +3394,12 @@ cached_dir_t *
 dirserv_lookup_cached_cons_diff_by_digest(const char *digest)
 {
   old_cached_consensus_t *c;
+  log_info(LD_DIRSERV, "Looking for cached consensus diff %s\n", digest);
+  log_info(LD_DIRSERV, "We have these:\n");
+  STRMAP_FOREACH(old_cached_consensus_by_digest, digest,
+                 old_cached_consensus_t *, c) {
+    log_info(LD_DIRSERV, "\t%s (cached_dir=%p)", digest, c->cached_dir);
+  } STRMAP_FOREACH_END;
   c = strmap_get(old_cached_consensus_by_digest, digest);
   if (!c) return NULL;
   return c->cached_dir;
