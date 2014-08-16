@@ -1708,8 +1708,10 @@ typedef struct dir_connection_t {
   /** If we're fetching descriptors, what router purpose shall we assign
    * to them? */
   uint8_t router_purpose;
-  /** List of fingerprints for networkstatuses or descriptors to be spooled. */
-  smartlist_t *fingerprint_stack;
+  /** List of resources for networkstatuses or descriptors to be spooled.
+   * Such resources may be fingerprints, flavor names or digests depending on
+   * what we are serving. */
+  smartlist_t *resource_stack;
   /** A cached_dir_t object that we're currently spooling out */
   struct cached_dir_t *cached_dir;
   /** The current offset into cached_dir. */
