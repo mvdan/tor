@@ -1714,8 +1714,6 @@ typedef struct dir_connection_t {
   uint8_t router_purpose;
   /** List of fingerprints for networkstatuses or descriptors to be spooled. */
   smartlist_t *fingerprint_stack;
-  /** If we're fetching a consensus diff, what digest identifies the diff? */
-  //char cons_diff_digest[DIGEST256_LEN];
   /** A cached_dir_t object that we're currently spooling out */
   struct cached_dir_t *cached_dir;
   /** The current offset into cached_dir. */
