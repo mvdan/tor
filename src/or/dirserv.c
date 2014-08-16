@@ -3366,7 +3366,7 @@ connection_dirserv_finish_spooling(dir_connection_t *conn)
 
 /** Spooling helper: called when we're sending a bunch of server descriptors,
  * and the outbuf has become too empty. Pulls some entries from
- * fingerprint_stack, and writes the corresponding servers onto outbuf.  If we
+ * resource_stack, and writes the corresponding servers onto outbuf.  If we
  * run out of entries, flushes the zlib state and sets the spool source to
  * NONE.  Returns 0 on success, negative on failure.
  */
@@ -3381,10 +3381,10 @@ connection_dirserv_add_servers_to_outbuf(dir_connection_t *conn)
 
   const or_options_t *options = get_options();
 
-  while (smartlist_len(conn->fingerprint_stack) &&
+  while (smartlist_len(conn->resource_stack) &&
          connection_get_outbuf_len(TO_CONN(conn)) < DIRSERV_BUFFER_MIN) {
     const char *body;
-    char *fp = smartlist_pop_last(conn->fingerprint_stack);
+    char *fp = smartlist_pop_last(conn->resource_stack);
     const signed_descriptor_t *sd = NULL;
     if (by_fp) {
       sd = get_signed_descriptor_by_fp(fp, extra, publish_cutoff);
@@ -3415,7 +3415,7 @@ connection_dirserv_add_servers_to_outbuf(dir_connection_t *conn)
     }
     body = signed_descriptor_get_body(sd);
     if (conn->zlib_state) {
-      int last = ! smartlist_len(conn->fingerprint_stack);
+      int last = ! smartlist_len(conn->resource_stack);
       connection_write_to_buf_zlib(body, sd->signed_descriptor_len, conn,
                                    last);
       if (last) {
@@ -3429,7 +3429,7 @@ connection_dirserv_add_servers_to_outbuf(dir_connection_t *conn)
     }
   }
 
-  if (!smartlist_len(conn->fingerprint_stack)) {
+  if (!smartlist_len(conn->resource_stack)) {
     /* We just wrote the last one; finish up. */
     if (conn->zlib_state) {
       connection_write_to_buf_zlib("", 0, conn, 1);
@@ -3437,15 +3437,15 @@ connection_dirserv_add_servers_to_outbuf(dir_connection_t *conn)
       conn->zlib_state = NULL;
     }
     conn->dir_spool_src = DIR_SPOOL_NONE;
-    smartlist_free(conn->fingerprint_stack);
-    conn->fingerprint_stack = NULL;
+    smartlist_free(conn->resource_stack);
+    conn->resource_stack = NULL;
   }
   return 0;
 }
 
 /** Spooling helper: called when we're sending a bunch of microdescriptors,
  * and the outbuf has become too empty. Pulls some entries from
- * fingerprint_stack, and writes the corresponding microdescs onto outbuf.  If
+ * resource_stack, and writes the corresponding microdescs onto outbuf.  If
  * we run out of entries, flushes the zlib state and sets the spool source to
  * NONE.  Returns 0 on success, negative on failure.
  */
@@ -3453,15 +3453,15 @@ static int
 connection_dirserv_add_microdescs_to_outbuf(dir_connection_t *conn)
 {
   microdesc_cache_t *cache = get_microdesc_cache();
-  while (smartlist_len(conn->fingerprint_stack) &&
+  while (smartlist_len(conn->resource_stack) &&
          connection_get_outbuf_len(TO_CONN(conn)) < DIRSERV_BUFFER_MIN) {
-    char *fp256 = smartlist_pop_last(conn->fingerprint_stack);
+    char *fp256 = smartlist_pop_last(conn->resource_stack);
     microdesc_t *md = microdesc_cache_lookup_by_digest256(cache, fp256);
     tor_free(fp256);
     if (!md || !md->body)
       continue;
     if (conn->zlib_state) {
-      int last = !smartlist_len(conn->fingerprint_stack);
+      int last = !smartlist_len(conn->resource_stack);
       connection_write_to_buf_zlib(md->body, md->bodylen, conn, last);
       if (last) {
         tor_zlib_free(conn->zlib_state);
@@ -3471,15 +3471,15 @@ connection_dirserv_add_microdescs_to_outbuf(dir_connection_t *conn)
       connection_write_to_buf(md->body, md->bodylen, TO_CONN(conn));
     }
   }
-  if (!smartlist_len(conn->fingerprint_stack)) {
+  if (!smartlist_len(conn->resource_stack)) {
     if (conn->zlib_state) {
       connection_write_to_buf_zlib("", 0, conn, 1);
       tor_zlib_free(conn->zlib_state);
       conn->zlib_state = NULL;
     }
     conn->dir_spool_src = DIR_SPOOL_NONE;
-    smartlist_free(conn->fingerprint_stack);
-    conn->fingerprint_stack = NULL;
+    smartlist_free(conn->resource_stack);
+    conn->resource_stack = NULL;
   }
   return 0;
 }
@@ -3526,7 +3526,7 @@ connection_dirserv_add_dir_bytes_to_outbuf(dir_connection_t *conn)
 /** Spooling helper: Called when we're spooling networkstatus objects on
  * <b>conn</b>, and the outbuf has become too empty.  If the current
  * networkstatus object (in <b>conn</b>-\>cached_dir) has more data, pull data
- * from there.  Otherwise, pop the next fingerprint from fingerprint_stack,
+ * from there.  Otherwise, pop the next fingerprint from resource_stack,
  * and start spooling the next networkstatus.  (A digest of all 0 bytes is
  * treated as a request for the current consensus.) If we run out of entries,
  * flushes the zlib state and sets the spool source to NONE.  Returns 0 on
@@ -3547,16 +3547,16 @@ connection_dirserv_add_networkstatus_bytes_to_outbuf(dir_connection_t *conn)
          * networkstatus, we may need to make a new zlib object to
          * uncompress the next one. */
         if (uncompressing && ! conn->zlib_state &&
-            conn->fingerprint_stack &&
-            smartlist_len(conn->fingerprint_stack)) {
+            conn->resource_stack &&
+            smartlist_len(conn->resource_stack)) {
           conn->zlib_state = tor_zlib_new(0, ZLIB_METHOD);
         }
       }
       if (r) return r;
-    } else if (conn->fingerprint_stack &&
-               smartlist_len(conn->fingerprint_stack)) {
+    } else if (conn->resource_stack &&
+               smartlist_len(conn->resource_stack)) {
       /* Add another networkstatus; start serving it. */
-      char *fp = smartlist_pop_last(conn->fingerprint_stack);
+      char *fp = smartlist_pop_last(conn->resource_stack);
       cached_dir_t *d = lookup_cached_dir_by_fp(fp);
       tor_free(fp);
       if (d) {
@@ -3566,8 +3566,8 @@ connection_dirserv_add_networkstatus_bytes_to_outbuf(dir_connection_t *conn)
       }
     } else {
       connection_dirserv_finish_spooling(conn);
-      smartlist_free(conn->fingerprint_stack);
-      conn->fingerprint_stack = NULL;
+      smartlist_free(conn->resource_stack);
+      conn->resource_stack = NULL;
       return 0;
     }
   }
@@ -3591,10 +3591,10 @@ connection_dirserv_add_cons_diff_bytes_to_outbuf(dir_connection_t *conn)
         conn->dir_spool_src = DIR_SPOOL_CONS_DIFF;
       }
       if (r) return r;
-    } else if (conn->fingerprint_stack &&
-               smartlist_len(conn->fingerprint_stack)) {
+    } else if (conn->resource_stack &&
+               smartlist_len(conn->resource_stack)) {
       /* Add another networkstatus; start serving it. */
-      char *digest = smartlist_pop_last(conn->fingerprint_stack);
+      char *digest = smartlist_pop_last(conn->resource_stack);
       cached_dir_t *d = dirserv_lookup_cached_cons_diff_by_digest(digest);
       tor_free(digest);
       if (d) {
@@ -3604,8 +3604,8 @@ connection_dirserv_add_cons_diff_bytes_to_outbuf(dir_connection_t *conn)
       }
     } else {
       connection_dirserv_finish_spooling(conn);
-      smartlist_free(conn->fingerprint_stack);
-      conn->fingerprint_stack = NULL;
+      smartlist_free(conn->resource_stack);
+      conn->resource_stack = NULL;
       return 0;
     }
   }

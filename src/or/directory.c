@@ -2804,7 +2804,7 @@ directory_handle_command_get(dir_connection_t *conn, const char *headers,
     (void) request_type;
     write_http_response_header(conn, -1, compressed,
                                smartlist_len(dir_fps) == 1 ? lifetime : 0);
-    conn->fingerprint_stack = dir_fps;
+    conn->resource_stack = dir_fps;
     if (! compressed)
       conn->zlib_state = tor_zlib_new(0, ZLIB_METHOD);
 
@@ -2940,7 +2940,7 @@ directory_handle_command_get(dir_connection_t *conn, const char *headers,
 
     write_http_response_header(conn, -1, compressed, MICRODESC_CACHE_LIFETIME);
     conn->dir_spool_src = DIR_SPOOL_MICRODESC;
-    conn->fingerprint_stack = fps;
+    conn->resource_stack = fps;
 
     if (compressed)
       conn->zlib_state = tor_zlib_new(1, ZLIB_METHOD);
@@ -2958,15 +2958,15 @@ directory_handle_command_get(dir_connection_t *conn, const char *headers,
     int cache_lifetime = 0;
     int is_extra = !strcmpstart(url,"/tor/extra/");
     url += is_extra ? strlen("/tor/extra/") : strlen("/tor/server/");
-    conn->fingerprint_stack = smartlist_new();
-    res = dirserv_get_routerdesc_fingerprints(conn->fingerprint_stack, url,
+    conn->resource_stack = smartlist_new();
+    res = dirserv_get_routerdesc_fingerprints(conn->resource_stack, url,
                                           &msg,
                                           !connection_dir_is_encrypted(conn),
                                           is_extra);
 
     if (!strcmpstart(url, "fp/")) {
       request_type = compressed?"/tor/server/fp.z":"/tor/server/fp";
-      if (smartlist_len(conn->fingerprint_stack) == 1)
+      if (smartlist_len(conn->resource_stack) == 1)
         cache_lifetime = ROUTERDESC_CACHE_LIFETIME;
     } else if (!strcmpstart(url, "authority")) {
       request_type = compressed?"/tor/server/authority.z":
@@ -2977,7 +2977,7 @@ directory_handle_command_get(dir_connection_t *conn, const char *headers,
       cache_lifetime = FULL_DIR_CACHE_LIFETIME;
     } else if (!strcmpstart(url, "d/")) {
       request_type = compressed?"/tor/server/d.z":"/tor/server/d";
-      if (smartlist_len(conn->fingerprint_stack) == 1)
+      if (smartlist_len(conn->resource_stack) == 1)
         cache_lifetime = ROUTERDESC_BY_DIGEST_CACHE_LIFETIME;
     } else {
       request_type = "/tor/server/?";
@@ -2990,7 +2990,7 @@ directory_handle_command_get(dir_connection_t *conn, const char *headers,
       conn->dir_spool_src =
         is_extra ? DIR_SPOOL_EXTRA_BY_FP : DIR_SPOOL_SERVER_BY_FP;
 
-    if (!dirserv_have_any_serverdesc(conn->fingerprint_stack,
+    if (!dirserv_have_any_serverdesc(conn->resource_stack,
                                      conn->dir_spool_src)) {
       res = -1;
       msg = "Not found";
@@ -2999,7 +2999,7 @@ directory_handle_command_get(dir_connection_t *conn, const char *headers,
     if (res < 0)
       write_http_status_line(conn, 404, msg);
     else {
-      dlen = dirserv_estimate_data_size(conn->fingerprint_stack,
+      dlen = dirserv_estimate_data_size(conn->resource_stack,
                                         1, compressed);
       if (global_write_bucket_low(TO_CONN(conn), dlen, 2)) {
         log_info(LD_DIRSERV,
