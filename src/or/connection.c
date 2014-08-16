@@ -607,9 +607,9 @@ connection_free_(connection_t *conn)
     tor_free(dir_conn->requested_resource);
 
     tor_zlib_free(dir_conn->zlib_state);
-    if (dir_conn->fingerprint_stack) {
-      SMARTLIST_FOREACH(dir_conn->fingerprint_stack, char *, cp, tor_free(cp));
-      smartlist_free(dir_conn->fingerprint_stack);
+    if (dir_conn->resource_stack) {
+      SMARTLIST_FOREACH(dir_conn->resource_stack, char *, cp, tor_free(cp));
+      smartlist_free(dir_conn->resource_stack);
     }
 
     cached_dir_decref(dir_conn->cached_dir);
