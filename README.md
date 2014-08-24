@@ -8,6 +8,9 @@
 * **consdiff-2**: Like consdiff-1, but rebased on a newer master and with a
   bunch of commits merged into others.
 
+* **consdiff-3**: Like consdiff-2, but rebased on a newer master and with a
+  bunch of commits merged into others.
+
 * **old-repo**: Exact branch copy from the old `tor_sample` repo
 
 * **old-repo-cleaned**: Like old-repo, but after removing unwanted files with
