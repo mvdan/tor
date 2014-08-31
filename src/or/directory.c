@@ -1177,12 +1177,8 @@ directory_send_command(dir_connection_t *conn,
     case DIR_PURPOSE_FETCH_CONSENSUS: {
       char *flavname = conn->requested_resource;
       char digest_hex[HEX_DIGEST256_LEN+1];
-      networkstatus_t *c;
-      if (!strcmp(flavname, "microdesc")) {
-        c = networkstatus_get_latest_consensus_by_flavor(FLAV_MICRODESC);
-      } else {
-        c = networkstatus_get_latest_consensus_by_flavor(FLAV_NS);
-      }
+      consensus_flavor_t flav = networkstatus_parse_flavor_name(flavname);
+      networkstatus_t *c = networkstatus_get_latest_consensus_by_flavor(flav);
       if (c) {
         base16_encode(digest_hex, HEX_DIGEST256_LEN+1,
                       c->digests.d[DIGEST_SHA256], DIGEST256_LEN);
