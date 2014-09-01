@@ -2876,8 +2876,7 @@ directory_handle_command_get(dir_connection_t *conn, const char *headers,
         SMARTLIST_FOREACH(dir_fps, char *, fp, tor_free(fp));
         smartlist_clear(dir_fps);
         smartlist_add(dir_fps, digest_dup);
-        compressed = 1; /* We always compress consensus diffs. */
-        request_type = "consdiff.z";
+        request_type = compressed?"consdiff.z":"consdiff";
       }
     }
     if (global_write_bucket_low(TO_CONN(conn), dlen, 2)) {
