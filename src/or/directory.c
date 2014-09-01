@@ -1138,6 +1138,44 @@ directory_get_consensus_url(const char *resource)
   return url;
 }
 
+/** Given an identity digest of a node or dir_server, tell whether we have a
+ * record of it sending a bad consensus diff since we have been running.
+ * There must be either a dir_server or a node identified by said identity
+ * digest. */
+static int
+get_has_sent_bad_diff(const char *identity_digest)
+{
+  const dir_server_t *dir_server =
+    router_get_trusteddirserver_by_digest(identity_digest);
+  if (dir_server) return dir_server->has_sent_bad_diff;
+
+  const node_t *node = node_get_by_id(identity_digest);
+  if (node) return node->has_sent_bad_diff;
+
+  /* We found neither a dir_server nor a node identified by the digest. */
+  tor_assert(0);
+  return 0;
+}
+
+/** Given an identity digest of a node or dir_server, memorize that it has sent
+ * us a bad consensus diff for as long as we are running. There must be either
+ * a dir_server or a node identified by said identity digest. */
+static void
+set_has_sent_bad_diff(const char *identity_digest)
+{
+  dir_server_t *dir_server;
+  node_t *node;
+
+  node = node_get_mutable_by_id(identity_digest);
+  if (node) node->has_sent_bad_diff = 1;
+
+  dir_server = router_get_trusteddirserver_by_digest(identity_digest);
+  if (dir_server) dir_server->has_sent_bad_diff = 1;
+
+  /* Make sure that we found at least one of the two. */
+  tor_assert(dir_server || node);
+}
+
 /** Queue an appropriate HTTP command on conn-\>outbuf.  The other args
  * are as in directory_initiate_command().
  */
@@ -1206,8 +1244,10 @@ directory_send_command(dir_connection_t *conn,
       if (c) {
         base16_encode(digest_hex, HEX_DIGEST256_LEN+1,
                       c->digests.d[DIGEST_SHA256], DIGEST256_LEN);
-        smartlist_add_asprintf(headers, "X-Or-Diff-From-Consensus: %s\r\n",
-                               digest_hex);
+        if (!get_has_sent_bad_diff(conn->identity_digest)) {
+          smartlist_add_asprintf(headers, "X-Or-Diff-From-Consensus: %s\r\n",
+                                 digest_hex);
+        }
       }
       /* resource is optional.  If present, it's a flavor name */
       tor_assert(!payload);
@@ -1595,6 +1635,9 @@ load_downloaded_routers(const char *body, smartlist_t *which,
  * consensus. The body may be a consensus diff to be applied to our currently
  * cached consensus, but it may also be the new consensus as a whole if the
  * server could not provide us with a diff (or didn't know yet how to do so).
+ * Returns a copy of the body if it was itself a consensus, the result of
+ * applying the diff if it was successful or NULL if the body was a diff but
+ * couldn't be applied resulting in a valid consensus.
  */
 static char *
 resolve_fetched_consensus(const char *body, size_t body_len,
@@ -1606,13 +1649,15 @@ resolve_fetched_consensus(const char *body, size_t body_len,
   smartlist_t *base_cons_lines, *body_lines;
   char *diff_result = NULL;
   char *body_dup = tor_strdup(body);
+  int is_diff;
   body_lines = smartlist_new();
   tor_split_lines(body_lines, body_dup, (int)body_len);
 
   /* Is a consensus diff. */
-  if (consdiff_get_digests(body_lines,
+  is_diff = consdiff_get_digests(body_lines,
                            NULL, base_cons_digest_hex,
-                           NULL, consensus_digest_hex) == 0) {
+                           NULL, consensus_digest_hex) == 0;
+  if (is_diff) {
     networkstatus_t *c;
     tor_mmap_t *cons_mmap;
     consensus_flavor_t flavor = networkstatus_parse_flavor_name(flavname);
@@ -1633,11 +1678,16 @@ resolve_fetched_consensus(const char *body, size_t body_len,
                                       &c->digests);
     tor_free(base_cons); smartlist_free(base_cons_lines);
     tor_free(body_dup); smartlist_free(body_lines);
-  }
-  if (diff_result) {
-    log_info(LD_DIR,"Fetched consensus (size %d) turned out to be "
-             "a diff and was applied successfully.", (int)body_len);
-    consensus = diff_result;
+
+    if (diff_result) {
+      log_info(LD_DIR,"Fetched consensus (size %d) turned out to be "
+               "a diff and was applied successfully.", (int)body_len);
+      consensus = diff_result;
+    } else {
+      log_info(LD_DIR,"Fetched consensus (size %d) was a diff but "
+               "could not be applied successfully.", (int)body_len);
+      consensus = NULL;
+    }
   } else {
     log_info(LD_DIR,"Fetched consensus (size %d) doesn't seem to be a diff",
              (int)body_len);
@@ -1842,6 +1892,9 @@ connection_dir_client_reached_eof(dir_connection_t *conn)
     }
     consensus = resolve_fetched_consensus(body, body_len, flavname);
     if (!consensus) {
+      // We never give a node a second chance to set has_sent_bad_diff to
+      // false, since we never request a consensus diff from it ever again.
+      set_has_sent_bad_diff(conn->identity_digest);
       tor_free(body); tor_free(headers); tor_free(reason);
       networkstatus_consensus_download_failed(0, flavname);
       return -1;
