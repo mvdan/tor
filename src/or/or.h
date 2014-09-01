@@ -2309,6 +2309,9 @@ typedef struct node_t {
   /** Local info: this node is in our list of guards */
   unsigned int using_as_guard:1;
 
+  /** True if this node has sent us a bad consensus diff */
+  unsigned int has_sent_bad_diff:1;
+
   /* Local info: derived. */
 
   /** True if the IPv6 OR port is preferred over the IPv4 OR port.  */
@@ -4929,6 +4932,9 @@ typedef struct dir_server_t {
   /** True iff this server has accepted the most recent server descriptor
    * we tried to upload to it. */
   unsigned int has_accepted_serverdesc:1;
+
+  /** True if this node has sent us a bad consensus diff */
+  unsigned int has_sent_bad_diff:1;
 
   /** What kind of authority is this? (Bitfield.) */
   dirinfo_type_t type;
