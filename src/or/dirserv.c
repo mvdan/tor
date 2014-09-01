@@ -3584,11 +3584,20 @@ connection_dirserv_add_cons_diff_bytes_to_outbuf(dir_connection_t *conn)
 
   while (connection_get_outbuf_len(TO_CONN(conn)) < DIRSERV_BUFFER_MIN) {
     if (conn->cached_dir) {
+      int uncompressing = (conn->zlib_state != NULL);
       int r = connection_dirserv_add_dir_bytes_to_outbuf(conn);
       if (conn->dir_spool_src == DIR_SPOOL_NONE) {
         /* add_dir_bytes thinks we're done with the cached_dir.  But we
          * may have more cached_dirs! */
         conn->dir_spool_src = DIR_SPOOL_CONS_DIFF;
+        /* This bit is tricky.  If we were uncompressing the last
+         * networkstatus, we may need to make a new zlib object to
+         * uncompress the next one. */
+        if (uncompressing && ! conn->zlib_state &&
+            conn->resource_stack &&
+            smartlist_len(conn->resource_stack)) {
+          conn->zlib_state = tor_zlib_new(0, ZLIB_METHOD);
+        }
       }
       if (r) return r;
     } else if (conn->resource_stack &&
