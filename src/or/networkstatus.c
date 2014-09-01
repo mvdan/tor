@@ -1169,6 +1169,26 @@ networkstatus_copy_old_consensus_info(networkstatus_t *new_c,
   } SMARTLIST_FOREACH_JOIN_END(rs_old, rs_new);
 }
 
+/** Get what number of old consensuses should we keep cached on disk to be
+ * used for various purposes, for example consensus diff generation. */
+int32_t
+networkstatus_get_old_consensuses_to_keep(const or_options_t *options)
+{
+  /* Auth dirs must keep consensuses. */
+  if (authdir_mode(options)) {
+#define CONS_TO_SAVE_DIRAUTH 200
+    return networkstatus_get_param(NULL, "ConsensusesToSaveDirAuth",
+        CONS_TO_SAVE_DIRAUTH, 0, INT32_MAX);
+  /* Relays keep consensuses by default but may decide not to. */
+  } else if (directory_caches_dir_info(options) &&
+      options->SaveConsensuses != 0) {
+#define CONS_TO_SAVE_RELAY 20
+    return networkstatus_get_param(NULL, "ConsensusesToSaveRelay",
+        CONS_TO_SAVE_DIRAUTH, 0, INT32_MAX);
+  }
+  return 0;
+}
+
 /** Try to replace the current cached v3 networkstatus with the one in
  * <b>consensus</b>.  If we don't have enough certificates to validate it,
  * store it in consensus_waiting_for_certs and launch a certificate fetch.
