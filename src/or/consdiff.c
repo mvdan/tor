@@ -478,8 +478,8 @@ gen_ed_diff(smartlist_t *cons1, smartlist_t *cons2)
           last_hash1 = hash1;
           hash1 = get_id_hash(smartlist_get(cons1, i1));
           if (base64cmp(hash1, last_hash1) <= 0) {
-            log_warn(LD_CONSDIFF, "Refusing to generate consensus diff because "
-                "the base consensus doesn't have its router entries "
+            log_warn(LD_CONSDIFF, "Refusing to generate consensus diff "
+                "because the base consensus doesn't have its router entries "
                 "sorted properly.");
             goto error_cleanup;
           }
@@ -495,8 +495,8 @@ gen_ed_diff(smartlist_t *cons1, smartlist_t *cons2)
           last_hash2 = hash2;
           hash2 = get_id_hash(smartlist_get(cons2, i2));
           if (base64cmp(hash2, last_hash2) <= 0) {
-            log_warn(LD_CONSDIFF, "Refusing to generate consensus diff because "
-                "the target consensus doesn't have its router entries "
+            log_warn(LD_CONSDIFF, "Refusing to generate consensus diff "
+                "because the target consensus doesn't have its router entries "
                 "sorted properly.");
             goto error_cleanup;
           }
@@ -801,7 +801,7 @@ consdiff_get_digests(smartlist_t *diff,
   /* Check that it's the format and version we know. */
   format = smartlist_get(diff, 0);
   if (strcmp(format, "network-status-diff-version 1")) {
-    log_info(LD_CONSDIFF, "The provided consensus diff's format is not known.");
+    log_info(LD_CONSDIFF, "The consensus diff's format is not known.");
     goto error_cleanup;
   }
 
