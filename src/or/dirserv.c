@@ -1342,6 +1342,7 @@ free_old_cached_consensus_(void *_c)
     tor_munmap_file(c->diff_mmap);
     tor_free(c->cached_dir);
   }
+  tor_free(c->digest);
   tor_free(c);
 }
 
@@ -1381,18 +1382,13 @@ dirserv_get_consensus(const char *flavor_name)
 #define OLD_CACHED_CONS_DIFFS_DIRNAME "old-cached-consensus-diffs"
 
 /** Reads what old consensuses and diffs have we got cached on disk and
- * updates old_cached_consensus_by_digest accordingly. */
+ * fills old_cached_consensus_by_digest accordingly. Should only be run once
+ * at startup. */
 void
 dirserv_refresh_stored_consensuses()
 {
   int i;
-  if (old_cached_consensus_by_digest) {
-    STRMAP_FOREACH(old_cached_consensus_by_digest, digest,
-                   old_cached_consensus_t *, c) {
-      tor_free(c);
-    } STRMAP_FOREACH_END;
-    strmap_free(old_cached_consensus_by_digest, NULL);
-  }
+  tor_assert(!old_cached_consensus_by_digest);
   old_cached_consensus_by_digest = strmap_new();
 
   for (i = 0; i < N_CONSENSUS_FLAVORS; ++i) {
@@ -1537,9 +1533,11 @@ dirserv_remove_old_consensuses(int32_t old_consensuses_to_keep)
       tor_free(consensus_fname);
       tor_free(diff_fname);
       tor_free(c->cached_dir);
+      tor_free(c->digest);
       tor_free(c);
     }
   } SMARTLIST_FOREACH_END(c);
+  smartlist_free(old_consensuses);
 }
 
 /** Updates all cached consensus diffs of a certain flavor given a consensus

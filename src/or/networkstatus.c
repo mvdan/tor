@@ -1973,6 +1973,8 @@ networkstatus_free_all(void)
   int i;
   networkstatus_vote_free(current_ns_consensus);
   networkstatus_vote_free(current_md_consensus);
+  tor_munmap_file(current_ns_consensus_mmap);
+  tor_munmap_file(current_md_consensus_mmap);
   current_md_consensus = current_ns_consensus = NULL;
 
   for (i=0; i < N_CONSENSUS_FLAVORS; ++i) {
