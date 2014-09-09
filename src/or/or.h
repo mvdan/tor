@@ -4253,6 +4253,8 @@ typedef struct {
    * XXXX Eventually, the default will be 0. */
   int ExitRelay;
 
+  /** Should we save old consensuses on disk? */
+  int SaveConsensuses;
 } or_options_t;
 
 /** Persistent state for an onion router, as saved to disk. */
