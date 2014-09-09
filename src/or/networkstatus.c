@@ -1146,6 +1146,21 @@ networkstatus_copy_old_consensus_info(networkstatus_t *new_c,
   } SMARTLIST_FOREACH_JOIN_END(rs_old, rs_new);
 }
 
+int32_t
+networkstatus_get_old_consensuses_to_keep(const or_options_t *options)
+{
+  if (authdir_mode(options)) {
+#define CONS_TO_SAVE_DIRAUTH 200
+    return networkstatus_get_param(NULL, "ConsensusesToSaveDirAuth",
+        CONS_TO_SAVE_DIRAUTH, 0, INT32_MAX);
+  } else if (directory_caches_dir_info(options)) {
+#define CONS_TO_SAVE_RELAY 20
+    return networkstatus_get_param(NULL, "ConsensusesToSaveRelay",
+        CONS_TO_SAVE_DIRAUTH, 0, INT32_MAX);
+  }
+  return 0;
+}
+
 /** Try to replace the current cached v3 networkstatus with the one in
  * <b>consensus</b>.  If we don't have enough certificates to validate it,
  * store it in consensus_waiting_for_certs and launch a certificate fetch.
@@ -1409,26 +1424,30 @@ networkstatus_set_current_consensus(const char *consensus,
   }
 
   if (directory_caches_dir_info(options)) {
+    int32_t old_consensuses_to_keep =
+      networkstatus_get_old_consensuses_to_keep(options);
     dirserv_set_cached_consensus_networkstatus(consensus,
                                                flavor,
                                                &c->digests,
                                                c->valid_after);
     if (!from_cache) {
-      dirserv_remove_old_consensuses();
+      dirserv_remove_old_consensuses(old_consensuses_to_keep);
     }
-    fprintf(stderr, "updating consensus diffs for %s\n", flavor);
-    if (dirserv_update_consensus_diffs(consensus, c->valid_after, flavor)<0) {
-      log_warn(LD_DIR, "Failed to update the stored consensus diffs.");
-      goto done;
-    }
-    if (!from_cache) {
-      char digest_hex[HEX_DIGEST256_LEN+1];
-      base16_encode(digest_hex, HEX_DIGEST256_LEN+1,
-                    c->digests.d[DIGEST_SHA256], DIGEST256_LEN);
-      if (dirserv_store_consensus(consensus, flavor, digest_hex,
-                                  c->valid_after)<0) {
-        log_warn(LD_DIR, "Unable to store fetched consensus "
-                 "for future diff purposes.");
+    if (old_consensuses_to_keep > 0) {
+      if (dirserv_update_consensus_diffs(consensus, c->valid_after,
+                                         flavor)<0) {
+        log_warn(LD_DIR, "Failed to update the stored consensus diffs.");
+        goto done;
+      }
+      if (!from_cache) {
+        char digest_hex[HEX_DIGEST256_LEN+1];
+        base16_encode(digest_hex, HEX_DIGEST256_LEN+1,
+                      c->digests.d[DIGEST_SHA256], DIGEST256_LEN);
+        if (dirserv_store_consensus(consensus, flavor, digest_hex,
+                                    c->valid_after)<0) {
+          log_warn(LD_DIR, "Unable to store fetched consensus "
+                   "for future diff purposes.");
+        }
       }
     }
   }
