@@ -1435,26 +1435,30 @@ networkstatus_set_current_consensus(const char *consensus,
   }
 
   if (directory_caches_dir_info(options)) {
+    int32_t old_consensuses_to_keep =
+      networkstatus_get_old_consensuses_to_keep(options);
     dirserv_set_cached_consensus_networkstatus(consensus,
                                                flavor,
                                                &c->digests,
                                                c->valid_after);
     if (!from_cache) {
-      dirserv_remove_old_consensuses();
+      dirserv_remove_old_consensuses(old_consensuses_to_keep);
     }
-    fprintf(stderr, "updating consensus diffs for %s\n", flavor);
-    if (dirserv_update_consensus_diffs(consensus, c->valid_after, flavor)<0) {
-      log_warn(LD_DIR, "Failed to update the stored consensus diffs.");
-      goto done;
-    }
-    if (!from_cache) {
-      char digest_hex[HEX_DIGEST256_LEN+1];
-      base16_encode(digest_hex, HEX_DIGEST256_LEN+1,
-                    c->digests.d[DIGEST_SHA256], DIGEST256_LEN);
-      if (dirserv_store_consensus(consensus, flavor, digest_hex,
-                                  c->valid_after)<0) {
-        log_warn(LD_DIR, "Unable to store fetched consensus "
-                 "for future diff purposes.");
+    if (old_consensuses_to_keep > 0) {
+      if (dirserv_update_consensus_diffs(consensus, c->valid_after,
+                                         flavor)<0) {
+        log_warn(LD_DIR, "Failed to update the stored consensus diffs.");
+        goto done;
+      }
+      if (!from_cache) {
+        char digest_hex[HEX_DIGEST256_LEN+1];
+        base16_encode(digest_hex, HEX_DIGEST256_LEN+1,
+                      c->digests.d[DIGEST_SHA256], DIGEST256_LEN);
+        if (dirserv_store_consensus(consensus, flavor, digest_hex,
+                                    c->valid_after)<0) {
+          log_warn(LD_DIR, "Unable to store fetched consensus "
+                   "for future diff purposes.");
+        }
       }
     }
   }
@@ -1980,6 +1984,8 @@ networkstatus_free_all(void)
   int i;
   networkstatus_vote_free(current_ns_consensus);
   networkstatus_vote_free(current_md_consensus);
+  tor_munmap_file(current_ns_consensus_mmap);
+  tor_munmap_file(current_md_consensus_mmap);
   current_md_consensus = current_ns_consensus = NULL;
 
   for (i=0; i < N_CONSENSUS_FLAVORS; ++i) {

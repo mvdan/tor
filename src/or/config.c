@@ -359,6 +359,7 @@ static config_var_t option_vars_[] = {
   V(Sandbox,                     BOOL,     "0"),
   V(SafeLogging,                 STRING,   "1"),
   V(SafeSocks,                   BOOL,     "0"),
+  V(SaveConsensuses,             AUTOBOOL, "auto"),
   V(ServerDNSAllowBrokenConfig,  BOOL,     "1"),
   V(ServerDNSAllowNonRFC953Hostnames, BOOL,"0"),
   V(ServerDNSDetectHijacking,    BOOL,     "1"),
