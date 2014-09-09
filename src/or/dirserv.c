@@ -1253,6 +1253,7 @@ free_old_cached_consensus_(void *_c)
     tor_munmap_file(c->diff_mmap);
     tor_free(c->cached_dir);
   }
+  tor_free(c->digest);
   tor_free(c);
 }
 
@@ -1292,18 +1293,13 @@ dirserv_get_consensus(const char *flavor_name)
 #define OLD_CACHED_CONS_DIFFS_DIRNAME "old-cached-consensus-diffs"
 
 /** Reads what old consensuses and diffs have we got cached on disk and
- * updates old_cached_consensus_by_digest accordingly. */
+ * fills old_cached_consensus_by_digest accordingly. Should only be run once
+ * at startup. */
 void
 dirserv_refresh_stored_consensuses()
 {
   int i;
-  if (old_cached_consensus_by_digest) {
-    STRMAP_FOREACH(old_cached_consensus_by_digest, digest,
-                   old_cached_consensus_t *, c) {
-      tor_free(c);
-    } STRMAP_FOREACH_END;
-    strmap_free(old_cached_consensus_by_digest, NULL);
-  }
+  tor_assert(!old_cached_consensus_by_digest);
   old_cached_consensus_by_digest = strmap_new();
 
   for (i = 0; i < N_CONSENSUS_FLAVORS; ++i) {
@@ -1331,6 +1327,7 @@ dirserv_refresh_stored_consensuses()
         c->flavor = i;
         c->valid_after = atol(smartlist_get(parts, 0));
         digest = smartlist_get(parts, 1);
+        c->digest = tor_strdup(digest);
         consensus_diff_fname = get_datadir_fname2(flavdir_diff, name);
         c->diff_mmap = tor_mmap_file(consensus_diff_fname);
         if (c->diff_mmap) {
@@ -1379,6 +1376,7 @@ dirserv_store_consensus(const char *consensus, const char *flavor,
   old_cached_consensus_t *c = tor_malloc(sizeof(old_cached_consensus_t));
   c->flavor = networkstatus_parse_flavor_name(flavor);
   c->valid_after = valid_after;
+  c->digest = tor_strdup(digest);
   c->diff_mmap = NULL;
   c->cached_dir = NULL;
   strmap_set(old_cached_consensus_by_digest, digest, c);
@@ -1386,23 +1384,42 @@ dirserv_store_consensus(const char *consensus, const char *flavor,
   return 0;
 }
 
-// A week for now
-#define KEEP_OLD_CONSENSUSES_INTERVAL (7*24*60*60)
-
-/* Iterates through all cached old consensuses and removes those that are
- * older than KEEP_OLD_CONSENSUSES_INTERVAL to keep the overall disk usage
- * down. */
-void
-dirserv_remove_old_consensuses()
+/** Helper for sorting: compares two old_cached_consensus elements and sorts
+ * them by age using the valid_after field. Newest end up first.
+ **/
+static int
+compare_old_consensus_by_age_(const void **a, const void **b)
 {
-  time_t now = time(NULL);
+  old_cached_consensus_t *first = *(old_cached_consensus_t **)a;
+  old_cached_consensus_t *second = *(old_cached_consensus_t **)b;
 
+  /* we return -1 if first is newer than second... that is, if first has a
+   * valid_after unixtime greater than the second. This puts the newer cached
+   * consensuses at the beginning and the older ones at the end. */
+  if (first->valid_after > second->valid_after)
+    return -1;
+  else if (first->valid_after < second->valid_after)
+    return 1;
+
+  /* They are equal. */
+  return 0;
+}
+
+/* Iterates through all cached old consensuses and keeps only the specified
+ * number of latest consensuses. */
+void
+dirserv_remove_old_consensuses(int32_t old_consensuses_to_keep)
+{
+  smartlist_t* old_consensuses = smartlist_new();
   tor_assert(old_cached_consensus_by_digest);
+  STRMAP_FOREACH(old_cached_consensus_by_digest, digest,
+                 old_cached_consensus_t *, c) {
+    smartlist_add(old_consensuses, c);
+  } STRMAP_FOREACH_END;
+  smartlist_sort(old_consensuses, compare_old_consensus_by_age_);
 
-  STRMAP_FOREACH_MODIFY(old_cached_consensus_by_digest, digest,
-                        old_cached_consensus_t *, c) {
-
-    if (c->valid_after + KEEP_OLD_CONSENSUSES_INTERVAL < now) {
+  SMARTLIST_FOREACH_BEGIN(old_consensuses, old_cached_consensus_t *, c) {
+    if (c_sl_idx > old_consensuses_to_keep) {
       char name[128], *consensus_fname, *diff_fname;
       char flavdir[64], flavdir_diff[64];
       const char *flavname = networkstatus_get_flavor_name(c->flavor);
@@ -1410,7 +1427,7 @@ dirserv_remove_old_consensuses()
                    OLD_CACHED_CONS_DIRNAME"-%s", flavname);
       tor_snprintf(flavdir_diff, sizeof(flavdir_diff),
                    OLD_CACHED_CONS_DIFFS_DIRNAME"-%s", flavname);
-      tor_snprintf(name, 128, "%li-%s", c->valid_after, digest);
+      tor_snprintf(name, 128, "%li-%s", c->valid_after, c->digest);
       consensus_fname = get_datadir_fname2(flavdir, name);
       diff_fname = get_datadir_fname2(flavdir_diff, name);
       if (unlink(consensus_fname)<0) {
@@ -1421,14 +1438,15 @@ dirserv_remove_old_consensuses()
         log_warn(LD_FS, "Failed to unlink %s: %s",
                  diff_fname, strerror(errno));
       }
+      strmap_remove(old_cached_consensus_by_digest, c->digest);
       tor_free(consensus_fname);
       tor_free(diff_fname);
       tor_free(c->cached_dir);
+      tor_free(c->digest);
       tor_free(c);
-      MAP_DEL_CURRENT(digest);
     }
-
   } SMARTLIST_FOREACH_END(c);
+  smartlist_free(old_consensuses);
 }
 
 /** Updates all cached consensus diffs of a certain flavor given a consensus

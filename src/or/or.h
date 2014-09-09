@@ -4295,6 +4295,8 @@ typedef struct {
   /** How long before auth keys expire will we try to make a new one? */
   int TestingAuthKeySlop;
 
+  /** Should we save old consensuses on disk? */
+  int SaveConsensuses;
 } or_options_t;
 
 /** Persistent state for an onion router, as saved to disk. */
