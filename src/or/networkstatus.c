@@ -1149,11 +1149,14 @@ networkstatus_copy_old_consensus_info(networkstatus_t *new_c,
 int32_t
 networkstatus_get_old_consensuses_to_keep(const or_options_t *options)
 {
+  /* Auth dirs must keep consensuses. */
   if (authdir_mode(options)) {
 #define CONS_TO_SAVE_DIRAUTH 200
     return networkstatus_get_param(NULL, "ConsensusesToSaveDirAuth",
         CONS_TO_SAVE_DIRAUTH, 0, INT32_MAX);
-  } else if (directory_caches_dir_info(options)) {
+  /* Relays keep consensuses by default but may decide not to. */
+  } else if (directory_caches_dir_info(options) &&
+      options->SaveConsensuses != 0) {
 #define CONS_TO_SAVE_RELAY 20
     return networkstatus_get_param(NULL, "ConsensusesToSaveRelay",
         CONS_TO_SAVE_DIRAUTH, 0, INT32_MAX);
