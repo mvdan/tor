@@ -5,11 +5,8 @@
 * **consdiff-1**: First feature branch, including old-repo-cleaned-4 on top of
   master and more work.
 
-* **consdiff-2**: Like consdiff-1, but rebased on a newer master and with a
-  bunch of commits merged into others.
-
-* **consdiff-3**: Like consdiff-2, but rebased on a newer master and with a
-  bunch of commits merged into others.
+* **consdiff-N**: More iterations of consdiff work rebased on top of a newer
+  master branch and a cleaned up history.
 
 * **old-repo**: Exact branch copy from the old `tor_sample` repo
 
