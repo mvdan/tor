@@ -885,11 +885,11 @@ consdiff_apply_diff(smartlist_t *cons1, smartlist_t *diff,
   /* See that the consensus that was given to us matches its hash. */
   if (memcmp(digests1->d[DIGEST_SHA256], e_cons1_hash,
              DIGEST256_LEN) != 0) {
+    char hex_digest1[HEX_DIGEST256_LEN+1];
+    char e_hex_digest1[HEX_DIGEST256_LEN+1];
     log_warn(LD_CONSDIFF, "Refusing to apply consensus diff because "
         "the base consensus doesn't match its own digest as found in "
         "the consensus diff header.");
-    char hex_digest1[HEX_DIGEST256_LEN+1];
-    char e_hex_digest1[HEX_DIGEST256_LEN+1];
     base16_encode(hex_digest1, HEX_DIGEST256_LEN+1,
         digests1->d[DIGEST_SHA256], DIGEST256_LEN);
     base16_encode(e_hex_digest1, HEX_DIGEST256_LEN+1,
@@ -926,11 +926,11 @@ consdiff_apply_diff(smartlist_t *cons1, smartlist_t *diff,
   /* See that the resulting consensus matches its hash. */
   if (memcmp(cons2_digests.d[DIGEST_SHA256], e_cons2_hash,
              DIGEST256_LEN) != 0) {
+    char hex_digest2[HEX_DIGEST256_LEN+1];
+    char e_hex_digest2[HEX_DIGEST256_LEN+1];
     log_warn(LD_CONSDIFF, "Refusing to apply consensus diff because "
         "the resulting consensus doesn't match its own digest as found in "
         "the consensus diff header.");
-    char hex_digest2[HEX_DIGEST256_LEN+1];
-    char e_hex_digest2[HEX_DIGEST256_LEN+1];
     base16_encode(hex_digest2, HEX_DIGEST256_LEN+1,
         cons2_digests.d[DIGEST_SHA256], DIGEST256_LEN);
     base16_encode(e_hex_digest2, HEX_DIGEST256_LEN+1,
