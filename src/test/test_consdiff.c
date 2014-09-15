@@ -777,9 +777,9 @@ test_consdiff_apply_diff(void)
 {
   smartlist_t *cons1=NULL, *diff=NULL;
   char *cons1_str=NULL, *cons2 = NULL;
+  digests_t digests1;
   cons1 = smartlist_new();
   diff = smartlist_new();
-  digests_t digests1;
 
   cons1_str = tor_strdup(
       "header\nnetwork-status-version foo\n"

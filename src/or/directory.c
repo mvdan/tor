@@ -1117,11 +1117,13 @@ directory_get_consensus_url(const char *resource)
 static int
 get_has_sent_bad_diff(const char *identity_digest)
 {
-  const dir_server_t *dir_server =
-    router_get_trusteddirserver_by_digest(identity_digest);
+  const dir_server_t *dir_server;
+  const node_t *node;
+
+  dir_server = router_get_trusteddirserver_by_digest(identity_digest);
   if (dir_server) return dir_server->has_sent_bad_diff;
 
-  const node_t *node = node_get_by_id(identity_digest);
+  node = node_get_by_id(identity_digest);
   if (node) return node->has_sent_bad_diff;
 
   return 0;
@@ -1130,11 +1132,13 @@ get_has_sent_bad_diff(const char *identity_digest)
 static void
 set_has_sent_bad_diff(const char *identity_digest, int value)
 {
-  node_t *node = node_get_mutable_by_id(identity_digest);
+  dir_server_t *dir_server;
+  node_t *node;
+
+  node = node_get_mutable_by_id(identity_digest);
   if (node) node->has_sent_bad_diff = value;
 
-  dir_server_t *dir_server =
-    router_get_trusteddirserver_by_digest(identity_digest);
+  dir_server = router_get_trusteddirserver_by_digest(identity_digest);
   if (dir_server) dir_server->has_sent_bad_diff = value;
 }
 
