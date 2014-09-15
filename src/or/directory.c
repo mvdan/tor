@@ -1121,11 +1121,13 @@ directory_get_consensus_url(const char *resource)
 static int
 get_has_sent_bad_diff(const char *identity_digest)
 {
-  const dir_server_t *dir_server =
-    router_get_trusteddirserver_by_digest(identity_digest);
+  const dir_server_t *dir_server;
+  const node_t *node;
+
+  dir_server = router_get_trusteddirserver_by_digest(identity_digest);
   if (dir_server) return dir_server->has_sent_bad_diff;
 
-  const node_t *node = node_get_by_id(identity_digest);
+  node = node_get_by_id(identity_digest);
   if (node) return node->has_sent_bad_diff;
 
   /* We found neither a dir_server nor a node identified by the digest. */
