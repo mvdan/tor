@@ -1177,12 +1177,10 @@ static void
 free_old_cached_consensus_(void *_c)
 {
   old_cached_consensus_t *c;
-  cached_dir_t *d;
   if (!_c)
     return;
 
   c = (old_cached_consensus_t *)_c;
-  d = c->cached_dir;
 
   if (c->cached_dir && --c->cached_dir->refcnt == 0) {
     tor_munmap_file(c->diff_mmap);
@@ -1231,7 +1229,7 @@ dirserv_get_consensus(const char *flavor_name)
  * fills old_cached_consensus_by_digest accordingly. Should only be run once
  * at startup. */
 void
-dirserv_refresh_stored_consensuses()
+dirserv_refresh_stored_consensuses(void)
 {
   int i;
   tor_assert(!old_cached_consensus_by_digest);
@@ -1294,6 +1292,7 @@ dirserv_store_consensus(const char *consensus, const char *flavor,
   char *consensus_compressed;
   size_t comp_len;
   int r;
+  old_cached_consensus_t *c;
   tor_snprintf(flavdir, sizeof(flavdir),
                OLD_CACHED_CONS_DIRNAME"-%s", flavor);
   if (check_or_create_data_subdir(flavdir) != 0) return -1;
@@ -1308,7 +1307,7 @@ dirserv_store_consensus(const char *consensus, const char *flavor,
   tor_free(consensus_compressed);
   if (r<0) return r;
 
-  old_cached_consensus_t *c = tor_malloc(sizeof(old_cached_consensus_t));
+  c = tor_malloc(sizeof(old_cached_consensus_t));
   c->flavor = networkstatus_parse_flavor_name(flavor);
   c->valid_after = valid_after;
   c->digest = tor_strdup(digest);

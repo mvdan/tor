@@ -3419,7 +3419,7 @@ tor_rmdir(const char *dirname)
              strerror(errno));
     return -1;
   }
-  if (!st.st_mode&S_IFDIR) {
+  if (!(st.st_mode&S_IFDIR)) {
     log_warn(LD_FS, "Path doesn't correspond to a directory: '%s'",
              dirname);
     return -1;
