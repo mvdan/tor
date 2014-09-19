@@ -1145,6 +1145,8 @@ networkstatus_copy_old_consensus_info(networkstatus_t *new_c,
   } SMARTLIST_FOREACH_JOIN_END(rs_old, rs_new);
 }
 
+/** Get what number of old consensuses should we keep cached on disk to be
+ * used for various purposes, for example consensus diff generation. */
 int32_t
 networkstatus_get_old_consensuses_to_keep(const or_options_t *options)
 {
