@@ -1172,7 +1172,7 @@ free_old_cached_consensus_(void *_c)
     tor_munmap_file(c->diff_mmap);
     tor_free(c->cached_dir);
   }
-  tor_free(c->digest);
+  tor_free(c->hex_digest);
   tor_free(c);
 }
 
@@ -1246,7 +1246,7 @@ dirserv_refresh_stored_consensuses(void)
         c->flavor = i;
         c->valid_after = atol(smartlist_get(parts, 0));
         digest = smartlist_get(parts, 1);
-        c->digest = tor_strdup(digest);
+        c->hex_digest = tor_strdup(digest);
         consensus_diff_fname = get_datadir_fname2(flavdir_diff, name);
         c->diff_mmap = tor_mmap_file(consensus_diff_fname);
         if (c->diff_mmap) {
@@ -1296,7 +1296,7 @@ dirserv_store_consensus(const char *consensus, const char *flavor,
   c = tor_malloc(sizeof(old_cached_consensus_t));
   c->flavor = networkstatus_parse_flavor_name(flavor);
   c->valid_after = valid_after;
-  c->digest = tor_strdup(digest);
+  c->hex_digest = tor_strdup(digest);
   c->diff_mmap = NULL;
   c->cached_dir = NULL;
   strmap_set(old_cached_consensus_by_digest, digest, c);
@@ -1349,7 +1349,7 @@ dirserv_remove_old_consensuses(int32_t old_consensuses_to_keep)
                    OLD_CACHED_CONS_DIRNAME"-%s", flavname);
       tor_snprintf(flavdir_diff, sizeof(flavdir_diff),
                    OLD_CACHED_CONS_DIFFS_DIRNAME"-%s", flavname);
-      tor_snprintf(name, 128, "%li-%s", c->valid_after, c->digest);
+      tor_snprintf(name, 128, "%li-%s", c->valid_after, c->hex_digest);
       consensus_fname = get_datadir_fname2(flavdir, name);
       diff_fname = get_datadir_fname2(flavdir_diff, name);
       if (unlink(consensus_fname)<0) {
@@ -1360,11 +1360,11 @@ dirserv_remove_old_consensuses(int32_t old_consensuses_to_keep)
         log_warn(LD_FS, "Failed to unlink %s: %s",
                  diff_fname, strerror(errno));
       }
-      strmap_remove(old_cached_consensus_by_digest, c->digest);
+      strmap_remove(old_cached_consensus_by_digest, c->hex_digest);
       tor_free(consensus_fname);
       tor_free(diff_fname);
       tor_free(c->cached_dir);
-      tor_free(c->digest);
+      tor_free(c->hex_digest);
       tor_free(c);
     }
   } SMARTLIST_FOREACH_END(c);

@@ -35,10 +35,15 @@
 /** Encapsulates useful info about old cached consensuses, to be used
  * later on when serving consensus diffs. */
 typedef struct old_cached_consensus_t {
-  char *digest;
+  /* Hex sha256 digest of the consensus. */
+  char *hex_digest;
+  /* valid_after time as found in the consensus. */
   time_t valid_after;
+  /* Memory map of the zlib-compressed consensus diff on disk. */
   tor_mmap_t *diff_mmap;
+  /* Flavor of the consensus. */
   consensus_flavor_t flavor;
+  /* Cached dir element used when serving consensus diffs. */
   cached_dir_t *cached_dir;
 } old_cached_consensus_t;
 
