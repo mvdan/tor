@@ -801,7 +801,7 @@ consdiff_get_digests(smartlist_t *diff,
   /* Check that it's the format and version we know. */
   format = smartlist_get(diff, 0);
   if (strcmp(format, "network-status-diff-version 1")) {
-    log_warn(LD_CONSDIFF, "The provided consensus diff's format is not known.");
+    log_warn(LD_CONSDIFF, "The provided consensus diff format is not known.");
     goto error_cleanup;
   }
 
