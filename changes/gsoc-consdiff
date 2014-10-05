@@ -1,0 +1,10 @@
+o New features (consensus diffs):
+  - Add support for consensus diffs throughout the network. Directory
+	authorities and relays will keep a number of old consensuses and generate
+	ed diffs to be served to other nodes. Thus most consensus downloads should
+	be incremental and much smaller than before. Implements proposal 140.
+
+  - Add two consensus parameters to configure the number of old consensuses
+	that directory authorities and relays should keep. Note that entire
+	consensuses will be compressed and stored on disk, so your Tor folder may
+	get bigger than before in the order of a couple to a few dozen megabytes.
