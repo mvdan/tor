@@ -8,12 +8,13 @@
 #include "consdiff.c"
 
 static void
-test_consdiff_smartlist_slice(void)
+test_consdiff_smartlist_slice(void *arg)
 {
   smartlist_t *sl = smartlist_new();
   smartlist_slice_t *sls;
 
   /* Create a regular smartlist. */
+  (void)arg;
   smartlist_add(sl, (void*)1);
   smartlist_add(sl, (void*)2);
   smartlist_add(sl, (void*)3);
@@ -39,12 +40,13 @@ test_consdiff_smartlist_slice(void)
 }
 
 static void
-test_consdiff_smartlist_slice_string_pos(void)
+test_consdiff_smartlist_slice_string_pos(void *arg)
 {
   smartlist_t *sl = smartlist_new();
   smartlist_slice_t *sls;
 
   /* Create a regular smartlist. */
+  (void)arg;
   smartlist_split_string(sl, "a:d:c:a:b", ":", 0, 0);
 
   /* See that smartlist_slice_string_pos respects the bounds of the slice. */
@@ -59,7 +61,7 @@ test_consdiff_smartlist_slice_string_pos(void)
 }
 
 static void
-test_consdiff_lcs_lengths(void)
+test_consdiff_lcs_lengths(void *arg)
 {
   smartlist_t *sl1 = smartlist_new();
   smartlist_t *sl2 = smartlist_new();
@@ -70,6 +72,7 @@ test_consdiff_lcs_lengths(void)
   int e_lengths1[] = { 0, 1, 2, 3, 3, 4 };
   int e_lengths2[] = { 0, 1, 1, 2, 3, 4 };
 
+  (void)arg;
   smartlist_split_string(sl1, "a:b:c:d:e", ":", 0, 0);
   smartlist_split_string(sl2, "a:c:d:i:e", ":", 0, 0);
 
@@ -93,7 +96,7 @@ test_consdiff_lcs_lengths(void)
 }
 
 static void
-test_consdiff_trim_slices(void)
+test_consdiff_trim_slices(void *arg)
 {
   smartlist_t *sl1 = smartlist_new();
   smartlist_t *sl2 = smartlist_new();
@@ -101,6 +104,7 @@ test_consdiff_trim_slices(void)
   smartlist_t *sl4 = smartlist_new();
   smartlist_slice_t *sls1, *sls2, *sls3, *sls4;
 
+  (void)arg;
   smartlist_split_string(sl1, "a:b:b:b:d", ":", 0, 0);
   smartlist_split_string(sl2, "a:c:c:c:d", ":", 0, 0);
   smartlist_split_string(sl3, "a:b:b:b:a", ":", 0, 0);
@@ -141,7 +145,7 @@ test_consdiff_trim_slices(void)
 }
 
 static void
-test_consdiff_set_changed(void)
+test_consdiff_set_changed(void *arg)
 {
   smartlist_t *sl1 = smartlist_new();
   smartlist_t *sl2 = smartlist_new();
@@ -149,6 +153,7 @@ test_consdiff_set_changed(void)
   bitarray_t *changed2 = bitarray_init_zero(4);
   smartlist_slice_t *sls1, *sls2;
 
+  (void)arg;
   smartlist_split_string(sl1, "a:b:a:a", ":", 0, 0);
   smartlist_split_string(sl2, "a:a:a:a", ":", 0, 0);
 
@@ -215,7 +220,7 @@ test_consdiff_set_changed(void)
 }
 
 static void
-test_consdiff_calc_changes(void)
+test_consdiff_calc_changes(void *arg)
 {
   smartlist_t *sl1 = smartlist_new();
   smartlist_t *sl2 = smartlist_new();
@@ -223,6 +228,7 @@ test_consdiff_calc_changes(void)
   bitarray_t *changed1 = bitarray_init_zero(4);
   bitarray_t *changed2 = bitarray_init_zero(4);
 
+  (void)arg;
   smartlist_split_string(sl1, "a:a:a:a", ":", 0, 0);
   smartlist_split_string(sl2, "a:a:a:a", ":", 0, 0);
 
@@ -297,10 +303,11 @@ test_consdiff_calc_changes(void)
 }
 
 static void
-test_consdiff_get_id_hash(void)
+test_consdiff_get_id_hash(void *arg)
 {
   const char *line, *e_hash;
   /* No hash. */
+  (void)arg;
   test_eq_ptr(NULL, get_id_hash("r name"));
   /* The hash contains characters that are not base64. */
   test_eq_ptr(NULL, get_id_hash( "r name _hash_isnt_base64 etc"));
@@ -314,9 +321,10 @@ test_consdiff_get_id_hash(void)
 }
 
 static void
-test_consdiff_is_valid_router_entry(void)
+test_consdiff_is_valid_router_entry(void *arg)
 {
   /* Doesn't start with "r ". */
+  (void)arg;
   test_eq(0, is_valid_router_entry("foo"));
 
   /* These are already tested with get_id_hash, but make sure it's run
@@ -331,9 +339,10 @@ test_consdiff_is_valid_router_entry(void)
 }
 
 static void
-test_consdiff_next_router(void)
+test_consdiff_next_router(void *arg)
 {
   smartlist_t *sl = smartlist_new();
+  (void)arg;
   smartlist_add(sl, (char*)"foo");
   smartlist_add(sl,
       (char*)"r name hash+longer+than+27+chars+and+valid+base64 etc");
@@ -359,9 +368,10 @@ test_consdiff_next_router(void)
 }
 
 static void
-test_consdiff_base64cmp(void)
+test_consdiff_base64cmp(void *arg)
 {
   /* NULL arguments. */
+  (void)arg;
   test_eq(0, base64cmp(NULL, NULL));
   test_eq(-1, base64cmp(NULL, "foo"));
   test_eq(1, base64cmp("bar", NULL));
@@ -392,10 +402,11 @@ test_consdiff_base64cmp(void)
 }
 
 static void
-test_consdiff_gen_ed_diff(void)
+test_consdiff_gen_ed_diff(void *arg)
 {
   smartlist_t *cons1=NULL, *cons2=NULL, *diff=NULL;
   int i;
+  (void)arg;
   cons1 = smartlist_new();
   cons2 = smartlist_new();
 
@@ -556,9 +567,10 @@ test_consdiff_gen_ed_diff(void)
 }
 
 static void
-test_consdiff_apply_ed_diff(void)
+test_consdiff_apply_ed_diff(void *arg)
 {
   smartlist_t *cons1=NULL, *cons2=NULL, *diff=NULL;
+  (void)arg;
   cons1 = smartlist_new();
   diff = smartlist_new();
 
@@ -703,11 +715,12 @@ test_consdiff_apply_ed_diff(void)
 }
 
 static void
-test_consdiff_gen_diff(void)
+test_consdiff_gen_diff(void *arg)
 {
   char *cons1_str=NULL, *cons2_str=NULL;
   smartlist_t *cons1=NULL, *cons2=NULL, *diff=NULL;
   digests_t digests1, digests2;
+  (void)arg;
   cons1 = smartlist_new();
   cons2 = smartlist_new();
 
@@ -773,11 +786,12 @@ test_consdiff_gen_diff(void)
 }
 
 static void
-test_consdiff_apply_diff(void)
+test_consdiff_apply_diff(void *arg)
 {
   smartlist_t *cons1=NULL, *diff=NULL;
   char *cons1_str=NULL, *cons2 = NULL;
   digests_t digests1;
+  (void)arg;
   cons1 = smartlist_new();
   diff = smartlist_new();
 
@@ -917,7 +931,7 @@ test_consdiff_apply_diff(void)
 }
 
 #define CONSDIFF_LEGACY(name)                                          \
-  { #name, legacy_test_helper, 0, &legacy_setup, test_consdiff_ ## name }
+  { #name, test_consdiff_ ## name , 0, NULL, NULL }
 
 struct testcase_t consdiff_tests[] = {
   CONSDIFF_LEGACY(smartlist_slice),
