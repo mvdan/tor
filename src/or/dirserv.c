@@ -3573,7 +3573,7 @@ connection_dirserv_add_cons_diff_bytes_to_outbuf(dir_connection_t *conn)
         if (uncompressing && ! conn->zlib_state &&
             conn->resource_stack &&
             smartlist_len(conn->resource_stack)) {
-          conn->zlib_state = tor_zlib_new(0, ZLIB_METHOD);
+          conn->zlib_state = tor_zlib_new(0, ZLIB_METHOD, HIGH_COMPRESSION);
         }
       }
       if (r) return r;
