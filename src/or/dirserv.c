@@ -1104,8 +1104,9 @@ directory_too_idle_to_fetch_descriptors(const or_options_t *options,
  * currently serving. */
 static strmap_t *cached_consensuses = NULL;
 
-/** Maps from HEX_SHA256 base consensus digests to the encapsulated info of
- * their consensus diff that we are currently serving. */
+/** Maps from HEX_SHA256 base consensus digests (char *) to the encapsulated
+ * info of their consensus diff that we are currently serving
+ * (old_cached_consensus_t *). */
 static strmap_t *old_cached_consensus_by_digest = NULL;
 
 /** Decrement the reference count on <b>d</b>, and free it if it no longer has
