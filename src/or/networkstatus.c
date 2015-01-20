@@ -1169,7 +1169,7 @@ networkstatus_copy_old_consensus_info(networkstatus_t *new_c,
 
 /** Get what number of old consensuses should we keep cached on disk to be
  * used for various purposes, for example consensus diff generation. */
-int32_t
+int
 networkstatus_get_old_consensuses_to_keep(const or_options_t *options)
 {
   /* Auth dirs must keep consensuses. */
