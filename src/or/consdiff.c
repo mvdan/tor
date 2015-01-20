@@ -34,6 +34,9 @@
 #include "consdiff.h"
 #include "routerparse.h"
 
+static const char* ns_diff_version = "network-status-diff-version 1";
+static const char* hash_token = "hash";
+
 /** Create (allocate) a new slice from a smartlist. Assumes that the start
  * and the end indexes are within the bounds of the initial smartlist. The end
  * element is not part of the resulting slice. If end is -1, the slice is to
@@ -773,8 +776,9 @@ consdiff_gen_diff(smartlist_t *cons1, smartlist_t *cons2,
 
   /* Create the resulting consensus diff. */
   result = smartlist_new();
-  smartlist_add_asprintf(result, "network-status-diff-version 1");
-  smartlist_add_asprintf(result, "hash %s %s", cons1_hash_hex, cons2_hash_hex);
+  smartlist_add_asprintf(result, "%s", ns_diff_version);
+  smartlist_add_asprintf(result, "%s %s %s", hash_token,
+      cons1_hash_hex, cons2_hash_hex);
   smartlist_add_all(result, ed_diff);
   smartlist_free(ed_diff);
   return result;
@@ -809,7 +813,7 @@ consdiff_get_digests(smartlist_t *diff,
 
   /* Check that it's the format and version we know. */
   format = smartlist_get(diff, 0);
-  if (strcmp(format, "network-status-diff-version 1")) {
+  if (strcmp(format, ns_diff_version)) {
     log_warn(LD_CONSDIFF, "The provided consensus diff format is not known.");
     goto error_cleanup;
   }
@@ -818,9 +822,9 @@ consdiff_get_digests(smartlist_t *diff,
   hash_words = smartlist_new();
   smartlist_split_string(hash_words, smartlist_get(diff, 1), " ", 0, 0);
 
-  /* There have to be three words, the first of which must be "hash". */
+  /* There have to be three words, the first of which must be hash_token. */
   if (smartlist_len(hash_words) != 3 ||
-      strcmp(smartlist_get(hash_words, 0), "hash")) {
+      strcmp(smartlist_get(hash_words, 0), hash_token)) {
     log_info(LD_CONSDIFF, "The provided consensus diff does not include "
         "the necessary sha256 digests.");
     goto error_cleanup;
