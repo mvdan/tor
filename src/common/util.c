@@ -3417,12 +3417,12 @@ tor_rmdir(const char *dirname)
   smartlist_t *elements;
   struct stat st;
 
-  r = stat(dirname, &st);
+  r = lstat(dirname, &st);
 
   if (r<0) {
     // Dir doesn't exist, nothing to do
     if (errno&ENOENT) return 0;
-    log_warn(LD_FS, "Error stat()ing dir '%s': %s", dirname,
+    log_warn(LD_FS, "Error lstat()ing dir '%s': %s", dirname,
              strerror(errno));
     return -1;
   }
@@ -3438,7 +3438,7 @@ tor_rmdir(const char *dirname)
   SMARTLIST_FOREACH_BEGIN(elements, const char *, cp) {
     char *tmp = NULL;
     tor_asprintf(&tmp, "%s"PATH_SEPARATOR"%s", dirname, cp);
-    if (0 == stat(tmp,&st) && (st.st_mode & S_IFDIR)) {
+    if (0 == lstat(tmp,&st) && (st.st_mode & S_IFDIR)) {
       if ((r=tor_rmdir(tmp))<0)
         log_warn(LD_FS, "Error removing directory '%s': %s", tmp,
                  strerror(errno));
