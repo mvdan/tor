@@ -1017,13 +1017,14 @@ networkstatus_get_latest_consensus(void)
 MOCK_IMPL(networkstatus_t *,
 networkstatus_get_latest_consensus_by_flavor,(consensus_flavor_t f))
 {
-  if (f == FLAV_NS)
-    return current_ns_consensus;
-  else if (f == FLAV_MICRODESC)
-    return current_md_consensus;
-  else {
-    tor_assert(0);
-    return NULL;
+  switch (f) {
+    case FLAV_NS:
+      return current_ns_consensus;
+    case FLAV_MICRODESC:
+      return current_md_consensus;
+    default:
+      tor_assert(0);
+      return NULL;
   }
 }
 
@@ -1033,13 +1034,14 @@ networkstatus_get_latest_consensus_by_flavor,(consensus_flavor_t f))
 tor_mmap_t *
 networkstatus_get_latest_consensus_mmap_by_flavor(consensus_flavor_t f)
 {
-  if (f == FLAV_NS)
-    return current_ns_consensus_mmap;
-  else if (f == FLAV_MICRODESC)
-    return current_md_consensus_mmap;
-  else {
-    tor_assert(0);
-    return NULL;
+  switch (f) {
+    case FLAV_NS:
+      return current_ns_consensus_mmap;
+    case FLAV_MICRODESC:
+      return current_md_consensus_mmap;
+    default:
+      tor_assert(0);
+      return NULL;
   }
 }
 
