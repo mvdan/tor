@@ -2845,7 +2845,7 @@ directory_handle_command_get(dir_connection_t *conn, const char *headers,
         cached_dir_t *d;
         log_info(LD_DIRSERV, "Client asked for a consensus diff from the "
                              "consensus known by digest %s", digest);
-        if ((d=dirserv_lookup_cached_cons_diff_by_digest(digest))) {
+        if ((d=dirserv_lookup_cached_consdiff_by_hexdigest256(digest))) {
           dir_spool_src = DIR_SPOOL_CONS_DIFF;
           dlen = d->dir_z_len;
         } else {

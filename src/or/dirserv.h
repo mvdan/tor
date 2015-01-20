@@ -111,7 +111,8 @@ void dirserv_set_node_flags_from_authoritative_status(node_t *node,
                                                       uint32_t authstatus);
 
 int dirserv_would_reject_router(const routerstatus_t *rs);
-cached_dir_t * dirserv_lookup_cached_cons_diff_by_digest(const char *digest);
+cached_dir_t *dirserv_lookup_cached_consdiff_by_hexdigest256(
+                                                           const char *digest);
 int dirserv_remove_old_statuses(smartlist_t *fps, time_t cutoff);
 int dirserv_have_any_serverdesc(smartlist_t *fps, int spool_src);
 int dirserv_have_any_microdesc(const smartlist_t *fps);

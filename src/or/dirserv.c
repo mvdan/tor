@@ -3198,7 +3198,7 @@ lookup_cached_dir_by_fp(const char *fp)
  * by said digest to the current consensus, or NULL if we have no such
  * consensus diff. */
 cached_dir_t *
-dirserv_lookup_cached_cons_diff_by_digest(const char *digest)
+dirserv_lookup_cached_consdiff_by_hexdigest256(const char *digest)
 {
   old_cached_consensus_t *c;
   c = strmap_get(old_cached_consensus_by_digest, digest);
@@ -3597,7 +3597,7 @@ connection_dirserv_add_cons_diff_bytes_to_outbuf(dir_connection_t *conn)
                smartlist_len(conn->resource_stack)) {
       /* Add another networkstatus; start serving it. */
       char *digest = smartlist_pop_last(conn->resource_stack);
-      cached_dir_t *d = dirserv_lookup_cached_cons_diff_by_digest(digest);
+      cached_dir_t *d = dirserv_lookup_cached_consdiff_by_hexdigest256(digest);
       tor_free(digest);
       if (d) {
         ++d->refcnt;
