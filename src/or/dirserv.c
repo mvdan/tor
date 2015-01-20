@@ -1254,25 +1254,41 @@ dirserv_refresh_stored_consensuses(void)
     SMARTLIST_FOREACH_BEGIN(filelist, const char *, name) {
       smartlist_t *parts = smartlist_new();
       int n = smartlist_split_string(parts, name, "-", 0, 0);
-      if (n == 2) {
-        char *digest, *consensus_diff_fname;
-        old_cached_consensus_t *c = tor_malloc(sizeof(old_cached_consensus_t));
-        c->flavor = i;
-        c->valid_after = atol(smartlist_get(parts, 0));
-        digest = smartlist_get(parts, 1);
-        c->hex_digest = tor_strdup(digest);
-        consensus_diff_fname = get_datadir_fname2(flavdir_diff, name);
-        c->diff_mmap = tor_mmap_file(consensus_diff_fname);
-        if (c->diff_mmap) {
-          c->cached_dir = new_cached_dir_comp((char*)c->diff_mmap->data,
-                                              c->diff_mmap->size,
-                                              0);
-        } else {
-          c->cached_dir = NULL;
-        }
-        tor_free(consensus_diff_fname);
-        strmap_set(old_cached_consensus_by_digest, digest, c);
+      if (n != 2) {
+        log_warn(LD_DIRSERV, "Found invalid filename format "
+            "for stored consensus: %s", name);
+        goto skip_file;
       }
+
+      char *digest, *consensus_diff_fname;
+      int ok = 0;
+      char *valid_after_str = smartlist_get(parts, 0);
+      time_t valid_after = tor_parse_ulong(valid_after_str,
+          10, 1, UINT32_MAX, &ok, NULL);
+      if (!ok) {
+        log_warn(LD_DIRSERV, "Found invalid valid_after uint "
+            "for stored consensus: %s", valid_after_str);
+        goto skip_file;
+      }
+
+      old_cached_consensus_t *c = tor_malloc(sizeof(old_cached_consensus_t));
+      c->flavor = i;
+      c->valid_after = valid_after;
+      digest = smartlist_get(parts, 1);
+      c->hex_digest = tor_strdup(digest);
+      consensus_diff_fname = get_datadir_fname2(flavdir_diff, name);
+      c->diff_mmap = tor_mmap_file(consensus_diff_fname);
+      if (c->diff_mmap) {
+        c->cached_dir = new_cached_dir_comp((char*)c->diff_mmap->data,
+                                            c->diff_mmap->size,
+                                            0);
+      } else {
+        c->cached_dir = NULL;
+      }
+      tor_free(consensus_diff_fname);
+      strmap_set(old_cached_consensus_by_digest, digest, c);
+
+      skip_file:
       SMARTLIST_FOREACH(parts, char *, str, tor_free(str));
       smartlist_free(parts);
     } SMARTLIST_FOREACH_END(name);
