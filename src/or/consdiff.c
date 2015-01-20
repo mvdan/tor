@@ -744,7 +744,8 @@ consdiff_gen_diff(smartlist_t *cons1, smartlist_t *cons2,
 
   ed_diff = gen_ed_diff(cons1, cons2);
   /* ed diff could not be generated - reason already logged by gen_ed_diff. */
-  if (!ed_diff) return NULL;
+  if (!ed_diff)
+    goto error_cleanup;
 
   /* See that the script actually produces what we want. */
   ed_cons2 = apply_ed_diff(cons1, ed_diff);
@@ -752,7 +753,7 @@ consdiff_gen_diff(smartlist_t *cons1, smartlist_t *cons2,
     log_warn(LD_CONSDIFF, "Refusing to generate consensus diff because "
         "the generated ed diff could not be tested to successfully generate "
         "the target consensus.");
-    return NULL;
+    goto error_cleanup;
   }
 
   cons2_eq = smartlist_strings_eq(cons2, ed_cons2);
@@ -762,7 +763,7 @@ consdiff_gen_diff(smartlist_t *cons1, smartlist_t *cons2,
     log_warn(LD_CONSDIFF, "Refusing to generate consensus diff because "
         "the generated ed diff did not generate the target consensus "
         "successfully when tested.");
-    return NULL;
+    goto error_cleanup;
   }
 
   base16_encode(cons1_hash_hex, HEX_DIGEST256_LEN+1,
@@ -777,6 +778,14 @@ consdiff_gen_diff(smartlist_t *cons1, smartlist_t *cons2,
   smartlist_add_all(result, ed_diff);
   smartlist_free(ed_diff);
   return result;
+
+  error_cleanup:
+
+  if (ed_diff) {
+    smartlist_free(ed_diff);
+  }
+
+  return NULL;
 }
 
 /** Fetch the digest of the base consensus in the consensus diff, encoded in
