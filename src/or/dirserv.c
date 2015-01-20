@@ -1361,7 +1361,6 @@ void
 dirserv_remove_old_consensuses(int32_t old_consensuses_to_keep)
 {
   smartlist_t* old_consensuses = smartlist_new();
-  int i;
   tor_assert(old_cached_consensus_by_digest);
   STRMAP_FOREACH(old_cached_consensus_by_digest, digest,
                  old_cached_consensus_t *, c) {
@@ -1369,9 +1368,8 @@ dirserv_remove_old_consensuses(int32_t old_consensuses_to_keep)
   } STRMAP_FOREACH_END;
   smartlist_sort(old_consensuses, compare_old_consensus_by_age_);
 
-  i = 0;
   SMARTLIST_FOREACH_BEGIN(old_consensuses, old_cached_consensus_t *, c) {
-    if (++i > old_consensuses_to_keep) {
+    if (c_sl_idx > old_consensuses_to_keep) {
       char name[128], *consensus_fname, *diff_fname;
       char flavdir[64], flavdir_diff[64];
       const char *flavname = networkstatus_get_flavor_name(c->flavor);
