@@ -2873,8 +2873,7 @@ directory_handle_command_get(dir_connection_t *conn, const char *headers,
       if (dir_spool_src == DIR_SPOOL_NETWORKSTATUS) {
         dlen = dirserv_estimate_data_size(dir_fps, 0, compressed);
       } else {
-        char *digest_dup = tor_malloc_zero(HEX_DIGEST256_LEN+1);
-        strlcpy(digest_dup, digest, HEX_DIGEST256_LEN+1);
+        char *digest_dup = tor_memdup_nulterm(digest, HEX_DIGEST256_LEN);
         SMARTLIST_FOREACH(dir_fps, char *, fp, tor_free(fp));
         smartlist_clear(dir_fps);
         smartlist_add(dir_fps, digest_dup);
