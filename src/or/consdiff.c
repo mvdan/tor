@@ -37,6 +37,19 @@
 static const char* ns_diff_version = "network-status-diff-version 1";
 static const char* hash_token = "hash";
 
+/** Data structure to define a slice of a smarltist. */
+typedef struct {
+  /**
+   * Smartlist that this slice is made from.
+   * References the whole original smartlist that the slice was made out of.
+   * */
+  smartlist_t *list;
+  /** Starting position of the slice in the smartlist. */
+  int offset;
+  /** Length of the slice, i.e. the number of elements it holds. */
+  int len;
+} smartlist_slice_t;
+
 /** Create (allocate) a new slice from a smartlist. Assumes that the start
  * and the end indexes are within the bounds of the initial smartlist. The end
  * element is not part of the resulting slice. If end is -1, the slice is to
