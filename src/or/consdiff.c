@@ -50,7 +50,6 @@ typedef struct {
   int len;
 } smartlist_slice_t;
 
-
 /** Create (allocate) a new slice from a smartlist. Assumes that the start
  * and the end indexes are within the bounds of the initial smartlist. The end
  * element is not part of the resulting slice. If end is -1, the slice is to
