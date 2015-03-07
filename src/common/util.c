@@ -3411,46 +3411,55 @@ int
 tor_rmdir(const char *dirname)
 {
   int r=0;
-  smartlist_t *elements;
   struct stat st;
 
   r = lstat(dirname, &st);
 
-  if (r<0) {
+  if (r < 0) {
     // Dir doesn't exist, nothing to do
-    if (errno&ENOENT) return 0;
+    if (errno & ENOENT) {
+      return 0;
+    }
     log_warn(LD_FS, "Error lstat()ing dir '%s': %s", dirname,
              strerror(errno));
     return -1;
   }
-  if (!(st.st_mode&S_IFDIR)) {
+  if (!(st.st_mode & S_IFDIR)) {
     log_warn(LD_FS, "Path doesn't correspond to a directory: '%s'",
              dirname);
     return -1;
   }
 
-  elements = tor_listdir(dirname);
-  if (!elements) return -1;
+  smartlist_t *elements = tor_listdir(dirname);
+  if (!elements) {
+    return -1;
+  }
 
   SMARTLIST_FOREACH_BEGIN(elements, const char *, cp) {
     char *tmp = NULL;
     tor_asprintf(&tmp, "%s"PATH_SEPARATOR"%s", dirname, cp);
-    if (0 == lstat(tmp,&st) && (st.st_mode & S_IFDIR)) {
-      if ((r=tor_rmdir(tmp))<0)
+    if (0 == lstat(tmp, &st) && (st.st_mode & S_IFDIR)) {
+      if ((r=tor_rmdir(tmp)) < 0) {
         log_warn(LD_FS, "Error removing directory '%s': %s", tmp,
                  strerror(errno));
+      }
     } else {
-      if ((r=unlink(tmp))<0)
+      if ((r=unlink(tmp)) < 0) {
         log_warn(LD_FS, "Error removing file '%s': %s", tmp,
                  strerror(errno));
+      }
     }
     tor_free(tmp);
-    if (r<0) break;
+    if (r < 0) {
+      break;
+    }
   } SMARTLIST_FOREACH_END(cp);
   SMARTLIST_FOREACH(elements, char *, cp, tor_free(cp));
   smartlist_free(elements);
-  if (r<0) return r;
-  if ((r=rmdir(dirname))<0) {
+  if (r < 0) {
+    return r;
+  }
+  if ((r=rmdir(dirname)) < 0) {
     log_warn(LD_FS, "Error removing directory '%s': %s", dirname,
              strerror(errno));
   }

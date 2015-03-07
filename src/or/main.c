@@ -2003,9 +2003,8 @@ do_main_loop(void)
   }
   /* See what consensuses have we cached on disk. */
   if (directory_caches_dir_info(get_options())) {
-    int old_consensuses_to_keep;
     dirserv_refresh_stored_consensuses();
-    old_consensuses_to_keep =
+    int old_consensuses_to_keep =
       networkstatus_get_old_consensuses_to_keep(get_options());
     dirserv_remove_old_consensuses(old_consensuses_to_keep);
   }
