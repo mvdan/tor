@@ -1146,14 +1146,16 @@ directory_get_consensus_url(const char *resource)
 static int
 get_has_sent_bad_diff(const char *identity_digest)
 {
-  const dir_server_t *dir_server;
-  const node_t *node;
+  const dir_server_t *dir_server = router_get_trusteddirserver_by_digest(
+      identity_digest);
+  if (dir_server) {
+    return dir_server->has_sent_bad_diff;
+  }
 
-  dir_server = router_get_trusteddirserver_by_digest(identity_digest);
-  if (dir_server) return dir_server->has_sent_bad_diff;
-
-  node = node_get_by_id(identity_digest);
-  if (node) return node->has_sent_bad_diff;
+  const node_t *node = node_get_by_id(identity_digest);
+  if (node) {
+    return node->has_sent_bad_diff;
+  }
 
   /* We found neither a dir_server nor a node identified by the digest. */
   tor_assert(0);
@@ -1166,14 +1168,16 @@ get_has_sent_bad_diff(const char *identity_digest)
 static void
 set_has_sent_bad_diff(const char *identity_digest)
 {
-  dir_server_t *dir_server;
-  node_t *node;
+  node_t *node = node_get_mutable_by_id(identity_digest);
+  if (node) {
+    node->has_sent_bad_diff = 1;
+  }
 
-  node = node_get_mutable_by_id(identity_digest);
-  if (node) node->has_sent_bad_diff = 1;
-
-  dir_server = router_get_trusteddirserver_by_digest(identity_digest);
-  if (dir_server) dir_server->has_sent_bad_diff = 1;
+  dir_server_t *dir_server = router_get_trusteddirserver_by_digest(
+      identity_digest);
+  if (dir_server) {
+    dir_server->has_sent_bad_diff = 1;
+  }
 
   /* Make sure that we found at least one of the two. */
   tor_assert(dir_server || node);
@@ -1646,24 +1650,20 @@ static char *
 resolve_fetched_consensus(const char *body, size_t body_len,
                           const char *flavname)
 {
-  char *base_cons, *consensus;
-  char base_cons_digest_hex[HEX_DIGEST256_LEN+1];
-  char consensus_digest_hex[HEX_DIGEST256_LEN+1];
-  smartlist_t *base_cons_lines, *body_lines;
-  char *diff_result = NULL;
+  char *consensus = NULL;
   char *body_dup = tor_strdup(body);
-  int is_diff;
-  body_lines = smartlist_new();
+  smartlist_t *body_lines = smartlist_new();
   tor_split_lines(body_lines, body_dup, (int)body_len);
 
-  /* Is a consensus diff. */
-  is_diff = consdiff_get_digests(body_lines,
+  char base_cons_digest_hex[HEX_DIGEST256_LEN+1];
+  char consensus_digest_hex[HEX_DIGEST256_LEN+1];
+  int is_diff = consdiff_get_digests(body_lines,
                            NULL, base_cons_digest_hex,
                            NULL, consensus_digest_hex) == 0;
+  /* Whether it is a consensus diff. */
   if (is_diff) {
-    networkstatus_t *c;
-    tor_mmap_t *cons_mmap;
     consensus_flavor_t flavor = networkstatus_parse_flavor_name(flavname);
+    tor_mmap_t *cons_mmap;
     cons_mmap = networkstatus_get_latest_consensus_mmap_by_flavor(flavor);
     if (!cons_mmap) {
       log_warn(LD_DIR,
@@ -1672,12 +1672,12 @@ resolve_fetched_consensus(const char *body, size_t body_len,
       tor_free(body_dup); smartlist_free(body_lines);
       return NULL;
     }
-    c = networkstatus_get_latest_consensus_by_flavor(flavor);
-    base_cons = tor_strndup(cons_mmap->data, cons_mmap->size);
+    networkstatus_t *c = networkstatus_get_latest_consensus_by_flavor(flavor);
+    char *base_cons = tor_strndup(cons_mmap->data, cons_mmap->size);
     tor_free(cons_mmap);
-    base_cons_lines = smartlist_new();
+    smartlist_t *base_cons_lines = smartlist_new();
     tor_split_lines(base_cons_lines, base_cons, (int)strlen(base_cons));
-    diff_result = consdiff_apply_diff(base_cons_lines, body_lines,
+    char *diff_result = consdiff_apply_diff(base_cons_lines, body_lines,
                                       &c->digests);
     tor_free(base_cons); smartlist_free(base_cons_lines);
     tor_free(body_dup); smartlist_free(body_lines);
