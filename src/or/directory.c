@@ -1158,7 +1158,7 @@ get_has_sent_bad_diff(const char *identity_digest)
   }
 
   /* We found neither a dir_server nor a node identified by the digest. */
-  tor_assert(0);
+  log_warn(LD_BUG, "Found no dir_server nor node identified by the given digest");
   return 0;
 }
 
@@ -1180,7 +1180,9 @@ set_has_sent_bad_diff(const char *identity_digest)
   }
 
   /* Make sure that we found at least one of the two. */
-  tor_assert(dir_server || node);
+  if (!node && !dir_server) {
+    log_warn(LD_BUG, "Found no dir_server nor node identified by the given digest");
+  }
 }
 
 /** Queue an appropriate HTTP command on conn-\>outbuf.  The other args
