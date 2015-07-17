@@ -1362,6 +1362,7 @@ dirserv_refresh_stored_consensuses(void)
       }
       c->hex_digest = tor_strdup(digest);
       char *consensus_diff_fname = get_datadir_fname2(flavdir_diff, name);
+      // TODO: check that the stored consensus is intact
       c->diff_mmap = tor_mmap_file(consensus_diff_fname);
       if (c->diff_mmap) {
         c->cached_dir = new_cached_dir_comp((char*)c->diff_mmap->data,
@@ -4023,6 +4024,8 @@ static int
 connection_dirserv_add_cons_diff_bytes_to_outbuf(dir_connection_t *conn)
 {
 
+  // TODO: duplicate code from add_networkstatus_bytes_to_outbuf, works but is
+  // probably buggy.
   while (connection_get_outbuf_len(TO_CONN(conn)) < DIRSERV_BUFFER_MIN) {
     if (conn->cached_dir) {
       int uncompressing = (conn->zlib_state != NULL);

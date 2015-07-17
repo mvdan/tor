@@ -1464,6 +1464,8 @@ networkstatus_set_current_consensus(const char *consensus,
       dirserv_remove_old_consensuses(old_consensuses_to_keep);
     }
     if (old_consensuses_to_keep > 0) {
+      // TODO: might want to do this in the background and have a lock to not
+      // serve consensus diffs until they are updated
       if (dirserv_update_consensus_diffs(consensus, c->valid_after,
                                          flavor)<0) {
         log_warn(LD_DIR, "Failed to update the stored consensus diffs.");
