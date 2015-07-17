@@ -1907,6 +1907,9 @@ connection_dir_client_reached_eof(dir_connection_t *conn)
       set_has_sent_bad_diff(conn->identity_digest);
       tor_free(body); tor_free(headers); tor_free(reason);
       networkstatus_consensus_download_failed(0, flavname);
+      log_warn(LD_DIR,
+          "Received invalid consensus diff from server '%s:%d'.",
+           conn->base_.address, conn->base_.port);
       return -1;
     }
     log_info(LD_DIR,"Received consensus directory from server '%s:%d'",
