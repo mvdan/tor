@@ -1287,6 +1287,23 @@ dirserv_get_consensus(const char *flavor_name)
   return strmap_get(cached_consensuses, flavor_name);
 }
 
+/** Checks whether a hexadecimal digest for a stored consensus is valid or
+ * not. Right now these use SHA256, thus HEX_DIGEST256_LEN is used. Returns -1
+ * if any issues are found, 0 otherwise. */
+static int
+check_stored_consensus_hexdigest(const char *digest)
+{
+  if (strlen(digest) != HEX_DIGEST256_LEN) {
+    return -1;
+  }
+  for (const char *c = digest; c != '\0'; c++) {
+    if (hex_decode_digit(*c) < 0) {
+      return -1;
+    }
+  }
+  return 0;
+}
+
 #define OLD_CACHED_CONS_DIRNAME "old-cached-consensuses"
 #define OLD_CACHED_CONS_DIFFS_DIRNAME "old-cached-consensus-diffs"
 
@@ -1338,6 +1355,11 @@ dirserv_refresh_stored_consensuses(void)
       c->flavor = i;
       c->valid_after = valid_after;
       char *digest = smartlist_get(parts, 1);
+      if (check_stored_consensus_hexdigest(digest) < 0) {
+        log_warn(LD_DIRSERV, "Found invalid hex sha256 digest "
+            "for stored consensus: %s", digest);
+        goto skip_file;
+      }
       c->hex_digest = tor_strdup(digest);
       char *consensus_diff_fname = get_datadir_fname2(flavdir_diff, name);
       c->diff_mmap = tor_mmap_file(consensus_diff_fname);
