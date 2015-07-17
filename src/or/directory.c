@@ -1653,6 +1653,11 @@ resolve_fetched_consensus(const char *body, size_t body_len,
                           const char *flavname)
 {
   char *consensus = NULL;
+  if (body_len > INT_MAX) {
+      log_warn(LD_DIR,
+          "Gotten a consensus body length that is too big.");
+      return NULL;
+  }
   char *body_dup = tor_strdup(body);
   smartlist_t *body_lines = smartlist_new();
   tor_split_lines(body_lines, body_dup, (int)body_len);
