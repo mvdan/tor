@@ -1681,7 +1681,7 @@ resolve_fetched_consensus(const char *body, size_t body_len,
     }
     networkstatus_t *c = networkstatus_get_latest_consensus_by_flavor(flavor);
     char *base_cons = tor_strndup(cons_mmap->data, cons_mmap->size);
-    tor_free(cons_mmap);
+    tor_munmap_file(cons_mmap);
     smartlist_t *base_cons_lines = smartlist_new();
     tor_split_lines(base_cons_lines, base_cons, (int)strlen(base_cons));
     char *diff_result = consdiff_apply_diff(base_cons_lines, body_lines,
